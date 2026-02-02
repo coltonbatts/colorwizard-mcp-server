@@ -12,6 +12,8 @@ export function BlueprintControls() {
   const loading = useBlueprintStore((state) => state.loading);
   const highQualityPreview = useBlueprintStore((state) => state.highQualityPreview);
   const setHighQualityPreview = useBlueprintStore((state) => state.setHighQualityPreview);
+  const mockMode = useBlueprintStore((state) => state.mockMode);
+  const setMockMode = useBlueprintStore((state) => state.setMockMode);
 
   return (
     <div className="space-y-6 p-4 bg-gray-900 rounded-lg border border-gray-800">
@@ -81,6 +83,20 @@ export function BlueprintControls() {
           type="checkbox"
           checked={params.mergeSmallRegions}
           onChange={(e) => updateParams({ mergeSmallRegions: e.target.checked })}
+          disabled={loading}
+          className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+      </div>
+
+      {/* Mock Mode Toggle */}
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+          Mock Mode
+        </label>
+        <input
+          type="checkbox"
+          checked={mockMode}
+          onChange={(e) => setMockMode(e.target.checked)}
           disabled={loading}
           className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
         />

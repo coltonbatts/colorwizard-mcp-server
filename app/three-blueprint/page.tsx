@@ -9,7 +9,7 @@ import { BlueprintCanvas } from '@/components/three/BlueprintCanvas';
 import { BlueprintControls } from '@/components/controls/BlueprintControls';
 import { PalettePanel, useHighlightColor } from '@/components/palette/PalettePanel';
 import { useBlueprintStore } from '@/store/blueprintStore';
-import { registerImage, generateBlueprintV1, getCacheKey } from '@/lib/api/blueprint';
+import { registerImage, generateBlueprintV1, getCacheKey, setMockModeEnabled } from '@/lib/api/blueprint';
 
 const DEBOUNCE_MS = 300;
 const FINAL_PREVIEW_DELAY_MS = 700;
@@ -32,20 +32,39 @@ export default function ThreeBlueprintPage() {
   const cacheResponse = useBlueprintStore((state) => state.cacheResponse);
   const getCachedResponse = useBlueprintStore((state) => state.getCachedResponse);
   const highQualityPreview = useBlueprintStore((state) => state.highQualityPreview);
+  const mockMode = useBlueprintStore((state) => state.mockMode);
+  const setMockMode = useBlueprintStore((state) => state.setMockMode);
+  const error = useBlueprintStore((state) => state.error);
+
+  // Sync mock mode to API layer
+  // CRITICAL: This ensures UI state and API layer are always synchronized
+  // Runs on mount and whenever mockMode changes
+  useEffect(() => {
+    setMockModeEnabled(mockMode);
+  }, [mockMode]);
+
+  // Initialize API layer mock mode on mount (ensures sync even if store initializes before this component)
+  useEffect(() => {
+    setMockModeEnabled(mockMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount
 
   const highlightColor = useHighlightColor();
   const highlightThreshold = 0.15; // RGB distance threshold for highlighting
 
   // Helper to get final preview maxSize based on toggle and device type
+  // SSR-safe: window check prevents hydration mismatch
   const getFinalMaxSize = useCallback(() => {
     // If high quality toggle is ON, always use 2048
     if (highQualityPreview) {
       return FINAL_MAX_SIZE_DESKTOP;
     }
     // Otherwise use device-appropriate default
+    // SSR-safe: Only check window on client side
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       return FINAL_MAX_SIZE_MOBILE;
     }
+    // SSR-safe default: assume desktop during SSR
     return FINAL_MAX_SIZE_DESKTOP;
   }, [highQualityPreview]);
 
@@ -57,6 +76,61 @@ export default function ThreeBlueprintPage() {
   const finalAbortControllerRef = useRef<AbortController | null>(null);
   const fastRequestIdRef = useRef(0);
   const finalRequestIdRef = useRef(0);
+
+  // Auto-load sample image in mock mode
+  useEffect(() => {
+    if (mockMode && !imageId && !originalPreviewUrl) {
+      const sampleImageUrl = '/mock/sample.jpg';
+      setOriginalPreviewUrl(sampleImageUrl);
+      
+      // Load sample image and register it
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            const base64 = canvas.toDataURL('image/jpeg');
+            
+            setLoading(true);
+            setStatusMessage('Registering image...');
+            
+            const registerResult = await registerImage({
+              imageBase64: base64,
+              maxSize: FINAL_MAX_SIZE_DESKTOP, // Use desktop max size for sample image registration
+            });
+            
+            if (registerResult.ok && registerResult.imageId) {
+              setImageId(registerResult.imageId);
+              setLoading(false);
+              setStatusMessage(null);
+              // Trigger preview after a short delay to ensure state is updated
+              setTimeout(() => {
+                triggerPreview(true);
+              }, 100);
+            } else {
+              setError('Failed to register sample image');
+              setLoading(false);
+              setStatusMessage(null);
+            }
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to load sample image');
+          setLoading(false);
+          setStatusMessage(null);
+        }
+      };
+      img.onerror = () => {
+        setError('Failed to load sample image');
+      };
+      img.src = sampleImageUrl;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mockMode]); // Only re-run when mockMode changes
 
   // Handle file upload
   const handleFileUpload = useCallback(async (file: File) => {
@@ -78,12 +152,19 @@ export default function ThreeBlueprintPage() {
       finalPreviewTimerRef.current = null;
     }
 
+    // OBJECT URL SAFETY: Revoke previous blob URL before creating new one
+    const previousUrl = originalPreviewUrl;
+    if (previousUrl && previousUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previousUrl);
+    }
+
     setError(null);
     setLastResponse(null);
     setImageId(null);
     setOriginalPreviewUrl(null);
 
     // Create object URL for immediate preview
+    // This will be cleaned up by the useEffect cleanup when originalPreviewUrl changes
     const objectUrl = URL.createObjectURL(file);
     setOriginalPreviewUrl(objectUrl);
 
@@ -100,7 +181,7 @@ export default function ThreeBlueprintPage() {
         // Register image
         const registerResult = await registerImage({
           imageBase64: base64,
-          maxSize: FINAL_MAX_SIZE,
+          maxSize: FINAL_MAX_SIZE_DESKTOP, // Use desktop max size for image registration
         });
 
         if (!registerResult.ok || !registerResult.imageId) {
@@ -114,13 +195,17 @@ export default function ThreeBlueprintPage() {
         // Trigger initial preview
         triggerPreview(true);
       } catch (err) {
+        // OBJECT URL SAFETY: Revoke object URL on error
+        if (objectUrl && objectUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(objectUrl);
+        }
         setError(err instanceof Error ? err.message : 'Failed to register image');
         setLoading(false);
         setStatusMessage(null);
       }
     };
     reader.readAsDataURL(file);
-  }, [setImageId, setOriginalPreviewUrl, setError, setLoading, setStatusMessage, setLastResponse]);
+  }, [setImageId, setOriginalPreviewUrl, setError, setLoading, setStatusMessage, setLastResponse, originalPreviewUrl]);
 
   // Generate preview with caching and cancellation
   // Uses separate abort controllers for fast vs final to prevent starvation
@@ -181,7 +266,8 @@ export default function ThreeBlueprintPage() {
             minRegionArea: params.minRegionArea,
             mergeSmallRegions: params.mergeSmallRegions,
           },
-          abortControllerRef.current.signal
+          abortControllerRef.current.signal,
+          originalPreviewUrl || undefined
         );
 
         // Check if response is stale (for this request type)
@@ -261,23 +347,34 @@ export default function ThreeBlueprintPage() {
     }
   }, [imageId, params.paletteSize, params.minRegionArea, params.mergeSmallRegions, triggerPreview]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount and when originalPreviewUrl changes
+  // OBJECT URL SAFETY: Always revoke blob URLs to prevent memory leaks
+  // Public asset URLs (starting with '/') must NOT be revoked
   useEffect(() => {
+    // Store previous URL for cleanup
+    const previousUrl = originalPreviewUrl;
+    
     return () => {
+      // Cleanup abort controllers
       if (fastAbortControllerRef.current) {
         fastAbortControllerRef.current.abort();
       }
       if (finalAbortControllerRef.current) {
         finalAbortControllerRef.current.abort();
       }
+      
+      // Cleanup timers
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
       if (finalPreviewTimerRef.current) {
         clearTimeout(finalPreviewTimerRef.current);
       }
-      if (originalPreviewUrl) {
-        URL.revokeObjectURL(originalPreviewUrl);
+      
+      // OBJECT URL SAFETY: Revoke blob URLs to prevent memory leaks
+      // Only revoke object URLs (blob:), never public asset URLs (/, /mock/, etc.)
+      if (previousUrl && previousUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previousUrl);
       }
     };
   }, [originalPreviewUrl]);
@@ -287,12 +384,47 @@ export default function ThreeBlueprintPage() {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="container mx-auto p-4">
-        <h1 className="text-3xl font-bold mb-2 uppercase tracking-wide">
-          ThreeJS Live Blueprint
-        </h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-3xl font-bold uppercase tracking-wide">
+            ThreeJS Live Blueprint
+          </h1>
+          {/* Mode badge */}
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
+                mockMode
+                  ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
+                  : 'bg-green-500/20 text-green-400 border border-green-500/50'
+              }`}
+            >
+              {mockMode ? 'Mock' : 'Live API'}
+            </span>
+          </div>
+        </div>
         <p className="text-gray-400 mb-6">
           Upload an image and preview realtime color quantization with Three.js
         </p>
+
+        {/* Error with switch to mock mode button */}
+        {error && !mockMode && (
+          <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-red-400 font-semibold mb-1">API Error</p>
+                <p className="text-red-300 text-sm">{error}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setMockMode(true);
+                  setError(null);
+                }}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded transition-colors"
+              >
+                Switch to Mock Mode
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* File upload */}
         <div className="mb-6">

@@ -35,6 +35,9 @@ export interface BlueprintState {
   // Preview quality
   highQualityPreview: boolean; // Toggle for high quality (2048px) vs default (1024px mobile, 2048px desktop)
   
+  // Mock mode
+  mockMode: boolean; // When true, use mock API instead of real backend
+  
   // Cache
   cache: Map<string, GenerateBlueprintV1Response>;
   
@@ -49,6 +52,7 @@ export interface BlueprintState {
   setStatusMessage: (message: string | null) => void;
   setHighlightedColorIndex: (index: number | null) => void;
   setHighQualityPreview: (enabled: boolean) => void;
+  setMockMode: (enabled: boolean) => void;
   cacheResponse: (key: string, response: GenerateBlueprintV1Response) => void;
   getCachedResponse: (key: string) => GenerateBlueprintV1Response | undefined;
   reset: () => void;
@@ -74,9 +78,35 @@ function isMobileDevice(): boolean {
  * Get default high quality preview setting based on device type
  * Mobile: false (defaults to 1024px)
  * Desktop: true (defaults to 2048px)
+ * 
+ * SSR-safe: Returns false during SSR, will be updated in useEffect on mount
  */
 function getDefaultHighQualityPreview(): boolean {
+  // SSR-safe default: assume desktop (true) to avoid hydration mismatch
+  // Will be corrected in useEffect on client mount
+  if (typeof window === 'undefined') return true;
   return !isMobileDevice();
+}
+
+/**
+ * Get default mock mode from environment variable
+ * 
+ * PRODUCTION SAFETY: In production (NODE_ENV=production), mock mode MUST default to false
+ * regardless of env vars to prevent accidental mock mode in production.
+ * 
+ * SSR-safe: Returns false during SSR, will be updated in useEffect on mount
+ */
+function getDefaultMockMode(): boolean {
+  // CRITICAL: Production safety guard - never enable mock mode in production
+  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
+    return false;
+  }
+  
+  // SSR-safe: return false during SSR, will be updated in useEffect on mount
+  if (typeof window === 'undefined') return false;
+  
+  // Development only: check env var
+  return process.env.NEXT_PUBLIC_BLUEPRINT_MOCK === '1';
 }
 
 export const useBlueprintStore = create<BlueprintState>((set, get) => ({
@@ -91,6 +121,7 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
   statusMessage: null,
   highlightedColorIndex: null,
   highQualityPreview: getDefaultHighQualityPreview(),
+  mockMode: getDefaultMockMode(),
   cache: new Map(),
 
   // Actions
@@ -106,6 +137,14 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
   setStatusMessage: (message) => set({ statusMessage: message }),
   setHighlightedColorIndex: (index) => set({ highlightedColorIndex: index }),
   setHighQualityPreview: (enabled) => set({ highQualityPreview: enabled }),
+  setMockMode: (enabled) => {
+    // PRODUCTION SAFETY: Never allow enabling mock mode in production
+    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
+      // Silently ignore attempts to enable mock mode in production
+      return;
+    }
+    set({ mockMode: enabled });
+  },
   cacheResponse: (key, response) => {
     const cache = get().cache;
     // Limit cache size to 20 entries
@@ -117,17 +156,28 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
     set({ cache: new Map(cache) });
   },
   getCachedResponse: (key) => get().cache.get(key),
-  reset: () => set({
-    imageId: null,
-    originalPreviewUrl: null,
-    params: defaultParams,
-    lastResponse: null,
-    loading: false,
-    error: null,
-    mode: 'fast',
-    statusMessage: null,
-    highlightedColorIndex: null,
-    highQualityPreview: getDefaultHighQualityPreview(),
-    cache: new Map(),
-  }),
+  reset: () => {
+    // PRODUCTION SAFETY: Ensure mockMode respects production guard even on reset
+    const safeMockMode = (() => {
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
+        return false;
+      }
+      return getDefaultMockMode();
+    })();
+    
+    set({
+      imageId: null,
+      originalPreviewUrl: null,
+      params: defaultParams,
+      lastResponse: null,
+      loading: false,
+      error: null,
+      mode: 'fast',
+      statusMessage: null,
+      highlightedColorIndex: null,
+      highQualityPreview: getDefaultHighQualityPreview(),
+      mockMode: safeMockMode,
+      cache: new Map(),
+    });
+  },
 }));
