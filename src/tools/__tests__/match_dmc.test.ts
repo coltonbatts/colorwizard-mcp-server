@@ -152,4 +152,56 @@ describe('match_dmc tool', () => {
             }
         });
     });
+
+    describe('metadata fields', () => {
+        it('should include method and inputNormalized fields in successful response', () => {
+            const input: MatchDmcInput = { hex: '#E31D42' };
+            const result = matchDmcHandler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.method).toBe('lab-d65-deltae76');
+            expect(result.inputNormalized).toBeDefined();
+            expect(result.inputNormalized?.rgb).toBeDefined();
+            expect(result.inputNormalized?.hex).toBeDefined();
+        });
+
+        it('should normalize hex input correctly', () => {
+            const input: MatchDmcInput = { hex: 'E31D42' }; // Without hash
+            const result = matchDmcHandler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.inputNormalized).toBeDefined();
+            expect(result.inputNormalized?.rgb).toEqual({ r: 227, g: 29, b: 66 });
+            expect(result.inputNormalized?.hex).toBe('#E31D42');
+        });
+
+        it('should normalize RGB input correctly', () => {
+            const input: MatchDmcInput = { rgb: { r: 227, g: 29, b: 66 } };
+            const result = matchDmcHandler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.inputNormalized).toBeDefined();
+            expect(result.inputNormalized?.rgb).toEqual({ r: 227, g: 29, b: 66 });
+            expect(result.inputNormalized?.hex).toBe('#E31D42');
+        });
+
+        it('should clamp RGB values out of range in inputNormalized', () => {
+            const input: MatchDmcInput = { rgb: { r: 300, g: -10, b: 128 } };
+            const result = matchDmcHandler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.inputNormalized).toBeDefined();
+            expect(result.inputNormalized?.rgb).toEqual({ r: 255, g: 0, b: 128 });
+            expect(result.inputNormalized?.hex).toBe('#FF0080');
+        });
+
+        it('should round RGB values in inputNormalized', () => {
+            const input: MatchDmcInput = { rgb: { r: 227.7, g: 29.3, b: 66.9 } };
+            const result = matchDmcHandler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.inputNormalized).toBeDefined();
+            expect(result.inputNormalized?.rgb).toEqual({ r: 228, g: 29, b: 67 });
+        });
+    });
 });

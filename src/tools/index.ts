@@ -4,6 +4,8 @@
 
 import { pingTool, pingHandler, type PingInput } from "./ping.js";
 import { matchDmcTool, matchDmcHandler, type MatchDmcInput } from "./match_dmc.js";
+import { sampleColorTool, sampleColorHandler, type SampleColorInput } from "./sample_color.js";
+import { healthTool, healthHandler } from "./health.js";
 import { analyzeImageRegion } from "./vision.js";
 import { vibeShifter, type ColorArray } from "./vibe.js";
 import { generateStitchPattern } from "./pattern.js";
@@ -27,7 +29,9 @@ export interface ToolDefinition {
  */
 export const tools: ToolDefinition[] = [
     pingTool,
+    healthTool,
     matchDmcTool,
+    sampleColorTool,
     {
         name: "analyze_image_region",
         description: "Extracts precise pixel data from a local image file at specified coordinates.",
@@ -172,7 +176,12 @@ export type ToolHandler = (args: unknown) => Promise<unknown> | unknown;
  */
 export const toolHandlers: Record<string, ToolHandler> = {
     ping: (args: unknown) => pingHandler(args as PingInput),
+    health: (_args: unknown) => healthHandler(),
     match_dmc: (args: unknown) => matchDmcHandler(args as MatchDmcInput),
+    sample_color: async (args: unknown) => {
+        const { imageBase64, x, y, radius, maxSize } = args as SampleColorInput;
+        return await sampleColorHandler({ imageBase64, x, y, radius, maxSize });
+    },
     analyze_image_region: async (args: unknown) => {
         const { image_path, x, y, radius } = args as {
             image_path: string;

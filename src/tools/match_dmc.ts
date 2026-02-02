@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
-import { deltaE76Rgb, type RGB } from "../lib/color/lab.js";
+import { rgbToLab, deltaE76, type RGB, type Lab } from "../lib/color/lab.js";
 
 export interface MatchDmcInput {
     rgb?: {
@@ -28,6 +28,11 @@ export interface MatchDmcOutput {
     best?: DmcMatch;
     alternatives?: DmcMatch[];
     error?: string;
+    method?: string;
+    inputNormalized?: {
+        rgb: RGB;
+        hex: string;
+    };
 }
 
 /**
@@ -48,7 +53,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
 
 
 /**
- * DMC thread entry from dataset
+ * DMC thread entry from dataset JSON
  */
 interface DmcDatasetEntry {
     id: string;
@@ -57,10 +62,29 @@ interface DmcDatasetEntry {
 }
 
 /**
- * Loads DMC dataset from JSON file
- * @returns DMC thread data with RGB values or null if file doesn't exist
+ * DMC thread entry with precomputed Lab values
  */
-function loadDmcDataset(): Array<{ id: string; name: string; hex: string; rgb: RGB }> | null {
+interface DmcEntryWithLab {
+    id: string;
+    name: string;
+    hex: string;
+    lab: Lab;
+}
+
+/**
+ * Precomputed DMC dataset with Lab values (loaded once at module load)
+ */
+let dmcDatasetWithLab: DmcEntryWithLab[] | null = null;
+
+/**
+ * Loads and precomputes DMC dataset with Lab values (called once at module load)
+ * @returns DMC thread data with precomputed Lab values or null if file doesn't exist
+ */
+function loadDmcDatasetWithLab(): DmcEntryWithLab[] | null {
+    if (dmcDatasetWithLab !== null) {
+        return dmcDatasetWithLab;
+    }
+
     // Resolve path relative to project root (src/data/dmc.json)
     const dataPath = resolve(process.cwd(), "src/data/dmc.json");
     
@@ -72,23 +96,42 @@ function loadDmcDataset(): Array<{ id: string; name: string; hex: string; rgb: R
         const fileContent = readFileSync(dataPath, "utf-8");
         const entries: DmcDatasetEntry[] = JSON.parse(fileContent);
         
-        // Convert hex to RGB for each entry
-        return entries.map((entry) => {
+        // Precompute Lab values for all entries once
+        dmcDatasetWithLab = entries.map((entry) => {
             const rgb = hexToRgb(entry.hex);
             if (!rgb) {
                 throw new Error(`Invalid hex color in dataset: ${entry.hex} for ${entry.id}`);
             }
+            const normalizedRgb: RGB = {
+                r: Math.max(0, Math.min(255, rgb.r)),
+                g: Math.max(0, Math.min(255, rgb.g)),
+                b: Math.max(0, Math.min(255, rgb.b)),
+            };
+            const lab = rgbToLab(normalizedRgb);
             return {
                 id: entry.id,
                 name: entry.name,
                 hex: entry.hex,
-                rgb,
+                lab,
             };
         });
+        
+        return dmcDatasetWithLab;
     } catch (error) {
         console.error("Failed to load DMC dataset:", error);
         return null;
     }
+}
+
+// Precompute dataset at module load time
+loadDmcDatasetWithLab();
+
+/**
+ * Check if DMC dataset is loaded (exported for health endpoint)
+ * @returns true if dataset is loaded, false otherwise
+ */
+export function isDmcDatasetLoaded(): boolean {
+    return dmcDatasetWithLab !== null;
 }
 
 /**
@@ -125,8 +168,9 @@ export function matchDmcHandler(input: MatchDmcInput): MatchDmcOutput {
         };
     }
 
-    // Try to load DMC dataset
-    const dmcDataset = loadDmcDataset();
+
+    // Get precomputed dataset (loaded once at module load)
+    const dmcDataset = loadDmcDatasetWithLab();
     if (!dmcDataset) {
         return {
             ok: false,
@@ -134,16 +178,23 @@ export function matchDmcHandler(input: MatchDmcInput): MatchDmcOutput {
         };
     }
 
-    // Normalize RGB values to 0-255 range
+    // Normalize RGB values to 0-255 range and compute Lab for input once
     const normalizedRgb: RGB = {
         r: Math.max(0, Math.min(255, Math.round(targetRgb.r))),
         g: Math.max(0, Math.min(255, Math.round(targetRgb.g))),
         b: Math.max(0, Math.min(255, Math.round(targetRgb.b))),
     };
+    const inputLab = rgbToLab(normalizedRgb);
 
-    // Calculate Delta E for all threads and find best match
+    // Convert normalized RGB to hex for metadata
+    const normalizedHex = `#${[normalizedRgb.r, normalizedRgb.g, normalizedRgb.b]
+        .map((val) => val.toString(16).padStart(2, "0"))
+        .join("")
+        .toUpperCase()}`;
+
+    // Calculate Delta E against precomputed Lab values
     const matches: Array<{ id: string; name: string; hex: string; deltaE: number }> = dmcDataset.map((thread) => {
-        const deltaE = deltaE76Rgb(normalizedRgb, thread.rgb);
+        const deltaE = deltaE76(inputLab, thread.lab);
         return {
             id: thread.id,
             name: thread.name,
@@ -155,7 +206,7 @@ export function matchDmcHandler(input: MatchDmcInput): MatchDmcOutput {
     // Sort by Delta E (lower is better)
     matches.sort((a, b) => a.deltaE - b.deltaE);
 
-    // Return best match and top 5 alternatives
+    // Return best match and top 5 alternatives with metadata
     const best = matches[0];
     const alternatives = matches.slice(1, 6);
 
@@ -163,6 +214,11 @@ export function matchDmcHandler(input: MatchDmcInput): MatchDmcOutput {
         ok: true,
         best,
         alternatives,
+        method: "lab-d65-deltae76",
+        inputNormalized: {
+            rgb: normalizedRgb,
+            hex: normalizedHex,
+        },
     };
 }
 

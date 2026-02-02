@@ -56,6 +56,42 @@ Health check tool that echoes a message with timestamp.
 }
 ```
 
+### `health`
+
+Returns server health status including version, uptime, tool count, dataset availability, and cache statistics.
+
+**Input:**
+```json
+{}
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "version": "1.0.0",
+  "uptimeSec": 1234,
+  "toolCount": 7,
+  "datasets": {
+    "dmc": true
+  },
+  "cache": {
+    "images": 2,
+    "hits": 15,
+    "misses": 5
+  }
+}
+```
+
+**Fields:**
+- `version`: Server version from package.json or VERSION environment variable
+- `uptimeSec`: Server uptime in seconds since process start
+- `toolCount`: Number of available MCP tools
+- `datasets.dmc`: Boolean indicating if DMC dataset is loaded
+- `cache.images`: Number of cached decoded/resized images
+- `cache.hits`: Number of cache hits
+- `cache.misses`: Number of cache misses
+
 ### `match_dmc`
 
 Matches a color (RGB or hex) to the nearest DMC embroidery thread using Lab color space and Delta E (CIE76) calculation for perceptually accurate color matching.

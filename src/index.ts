@@ -80,6 +80,19 @@ export class ColorWizardServer {
                 };
             }
 
+            // Health tool handler
+            if (toolName === "health") {
+                const result = toolHandlers.health({});
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(result, null, 2),
+                        },
+                    ],
+                };
+            }
+
             // Match DMC tool handler
             if (toolName === "match_dmc") {
                 const schema = z.object({
@@ -102,6 +115,35 @@ export class ColorWizardServer {
                 }
 
                 const result = toolHandlers.match_dmc(parseResult.data);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(result, null, 2),
+                        },
+                    ],
+                };
+            }
+
+            // Sample color tool handler
+            if (toolName === "sample_color") {
+                const schema = z.object({
+                    imageBase64: z.string(),
+                    x: z.number().min(0).max(1),
+                    y: z.number().min(0).max(1),
+                    radius: z.number().min(0).optional(),
+                    maxSize: z.number().positive().optional(),
+                });
+
+                const parseResult = schema.safeParse(request.params.arguments);
+                if (!parseResult.success) {
+                    throw new McpError(
+                        ErrorCode.InvalidParams,
+                        parseResult.error.issues[0]?.message || "Invalid parameters for sample_color"
+                    );
+                }
+
+                const result = await toolHandlers.sample_color(parseResult.data);
                 return {
                     content: [
                         {
