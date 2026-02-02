@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColorWizard | Blueprint Mode Demo</title>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --paper: #111111;
+            --accent: #ff3e00;
+            --text: #e0e0e0;
+            --muted: #888888;
+        }
+        body {
+            font-family: 'Inter', -apple-system, system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: var(--paper);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+            border: 1px solid #222;
+        }
+        h1 {
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+        }
+        p { color: var(--muted); margin-bottom: 2rem; font-size: 0.9rem; }
+        .upload-area {
+            border: 2px dashed #333;
+            padding: 3rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 1.5rem;
+        }
+        .upload-area:hover { border-color: var(--accent); background: #161616; }
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.8rem;
+            transition: filter 0.2s;
+        }
+        .btn:hover { filter: brightness(1.2); }
+        .preview {
+            margin-top: 2rem;
+            max-width: 100%;
+            border: 1px solid #333;
+            display: none;
+        }
+        #file-input { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Blueprint Mode</h1>
+        <p>Transform any image into a vector paint-by-number blueprint.</p>
+        
+        <div class="upload-area" onclick="document.getElementById('file-input').click()">
+            <span id="upload-label">Click to upload or drag image here</span>
+            <input type="file" id="file-input" accept="image/*" onchange="handleUpload(event)">
+        </div>
+
+        <div id="actions" style="display: none;">
+            <button class="btn" onclick="downloadBlueprint()">Export Blueprint (SVG)</button>
+        </div>
+
+        <img id="preview-img" class="preview">
+    </div>
+
+    <script>
+        let currentImage = null;
+
+        function handleUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = document.getElementById('preview-img');
+                img.src = e.target.result;
+                img.style.display = 'block';
+                document.getElementById('upload-label').innerText = file.name;
+                document.getElementById('actions').style.display = 'block';
+                currentImage = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function downloadBlueprint() {
+            alert("Blueprint generation is a server-side MCP tool. In a full production environment, this would call 'generate_blueprint'. For this demo, a mock download will occur.");
+            
+            // Mock SVG content as a placeholder
+            const mockSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="none" stroke="black"/><text x="50" y="50" text-anchor="middle">BLUEPRINT</text></svg>`;
+            
+            const blob = new Blob([mockSvg], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'colorwizard-blueprint.svg';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>

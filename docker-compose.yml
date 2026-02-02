@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  colorwizard-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: colorwizard-mcp
+    restart: unless-stopped
+    # Currently using stdio transport, but exposing port for future SSE transport
+    ports:
+      - "3000:3000"
+    # Volume mount for image files if needed for image analysis
+    volumes:
+      - ./images:/app/images:ro
+    # Environment variables (can be extended for configuration)
+    environment:
+      - NODE_ENV=production
+    # Keep container running
+    stdin_open: true
+    tty: true
+    # Health check (optional, can be customized)
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
