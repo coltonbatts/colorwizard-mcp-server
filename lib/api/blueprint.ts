@@ -5,9 +5,9 @@
 // Use NEXT_PUBLIC_DEMO_ORIGIN for explicit demo server origin
 // Defaults to http://localhost:3001 to match demo/server.ts default port
 // Can be overridden via NEXT_PUBLIC_DEMO_ORIGIN env var or DEMO_PORT env var on server side
-const DEMO_ORIGIN = process.env.NEXT_PUBLIC_DEMO_ORIGIN || 
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-    ? 'http://localhost:3001' 
+const DEMO_ORIGIN = process.env.NEXT_PUBLIC_DEMO_ORIGIN ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3001'
     : 'http://localhost:3001');
 
 // Export for diagnostics display
@@ -48,18 +48,18 @@ function isMockMode(): boolean {
   if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
     return false;
   }
-  
+
   // In development, check both the module variable and env var
   // The module variable takes precedence (set by page component)
   if (mockModeEnabled) {
     return true;
   }
-  
+
   // Fallback to env var check (for initial load before useEffect runs)
   if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_BLUEPRINT_MOCK === '1') {
     return true;
   }
-  
+
   return false;
 }
 
@@ -108,7 +108,7 @@ async function loadDmcDataset(): Promise<DmcEntryWithRgb[]> {
       throw new Error(`Failed to load DMC dataset: ${response.status}`);
     }
     const entries: DmcDatasetEntry[] = await response.json();
-    
+
     // Convert hex to RGB
     dmcDatasetCache = entries.map((entry) => {
       const hex = entry.hex.replace(/^#/, '');
@@ -122,7 +122,7 @@ async function loadDmcDataset(): Promise<DmcEntryWithRgb[]> {
         rgb: [r, g, b] as [number, number, number],
       };
     });
-    
+
     return dmcDatasetCache;
   } catch (error) {
     console.error('Failed to load DMC dataset:', error);
@@ -163,7 +163,7 @@ function rgbDistance(rgb1: [number, number, number], rgb2: [number, number, numb
 function findNearestDmc(rgb: [number, number, number], palette: DmcEntryWithRgb[]): DmcEntryWithRgb {
   let nearest = palette[0];
   let minDistance = rgbDistance(rgb, palette[0].rgb);
-  
+
   for (let i = 1; i < palette.length; i++) {
     const distance = rgbDistance(rgb, palette[i].rgb);
     if (distance < minDistance) {
@@ -171,7 +171,7 @@ function findNearestDmc(rgb: [number, number, number], palette: DmcEntryWithRgb[
       nearest = palette[i];
     }
   }
-  
+
   return nearest;
 }
 
@@ -207,7 +207,7 @@ async function loadImageData(imageUrl: string, maxSize: number = 2048): Promise<
         reject(new Error('Failed to get canvas context'));
         return;
       }
-      
+
       ctx.drawImage(img, 0, 0, width, height);
       const imageData = ctx.getImageData(0, 0, width, height);
       imageDataCache.set(cacheKey, imageData);
@@ -229,13 +229,13 @@ function recolorImageWithDmcPalette(
   const { data, width, height } = imageData;
   const output = new ImageData(width, height);
   const outputData = output.data;
-  
+
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
     const a = data[i + 3];
-    
+
     // Find nearest DMC color and set output pixel to DMC RGB
     const nearest = findNearestDmc([r, g, b], palette);
     outputData[i] = nearest.rgb[0];
@@ -243,7 +243,7 @@ function recolorImageWithDmcPalette(
     outputData[i + 2] = nearest.rgb[2];
     outputData[i + 3] = a;
   }
-  
+
   return output;
 }
 
@@ -313,33 +313,73 @@ function createRng(seed: number): () => number {
 function selectDmcPalette(
   dmcDataset: DmcEntryWithRgb[],
   paletteSize: number,
-  seed: number
+  seed: number = 42,
+  imageData?: ImageData
 ): DmcEntryWithRgb[] {
   if (dmcDataset.length === 0) {
     // Fallback if dataset failed to load
     return [];
   }
-  
+
   const next = createRng(seed);
   const selected: DmcEntryWithRgb[] = [];
   const usedIndices = new Set<number>();
-  
-  // Select diverse colors by sampling across the dataset
-  for (let i = 0; i < paletteSize; i++) {
-    let index: number;
-    let attempts = 0;
-    do {
-      // Sample across the dataset with some randomness
-      const baseIndex = Math.floor((i / paletteSize) * dmcDataset.length);
-      const offset = Math.floor(next() * Math.min(50, dmcDataset.length / paletteSize));
-      index = (baseIndex + offset) % dmcDataset.length;
-      attempts++;
-    } while (usedIndices.has(index) && attempts < 100);
-    
-    usedIndices.add(index);
-    selected.push(dmcDataset[index]);
+
+  if (imageData) {
+    // Better Mock: Sample 200 random pixels from the image and find best DMC matches for them
+    // Then pick the top N unique ones
+    const pixelSamples: Array<[number, number, number]> = [];
+    const pixels = imageData.data;
+    for (let i = 0; i < 200; i++) {
+      const pixelIdx = Math.floor(next() * (pixels.length / 4)) * 4;
+      pixelSamples.push([pixels[pixelIdx], pixels[pixelIdx + 1], pixels[pixelIdx + 2]]);
+    }
+
+    // Map samples to DMC entries
+    const candidates = pixelSamples.map(rgb => findNearestDmc(rgb, dmcDataset));
+
+    // Sort candidates by count
+    const counts = new Map<string, { entry: DmcEntryWithRgb, count: number }>();
+    candidates.forEach(entry => {
+      const existing = counts.get(entry.id) || { entry, count: 0 };
+      counts.set(entry.id, { entry, count: existing.count + 1 });
+    });
+
+    const sortedCandidates = Array.from(counts.values())
+      .sort((a, b) => b.count - a.count)
+      .map(c => c.entry);
+
+    // Pick top N
+    for (let i = 0; i < Math.min(paletteSize, sortedCandidates.length); i++) {
+      selected.push(sortedCandidates[i]);
+    }
+
+    // Pad with random if needed
+    if (selected.length < paletteSize) {
+      for (let i = selected.length; i < paletteSize; i++) {
+        const idx = Math.floor(next() * dmcDataset.length);
+        selected.push(dmcDataset[idx]);
+      }
+    }
+  } else {
+    // Fallback if no image (e.g. initial load)
+    // Select diverse colors by sampling across the dataset
+    for (let i = 0; i < paletteSize; i++) {
+      let index: number;
+      let attempts = 0;
+      do {
+        // Sample across the dataset with some randomness
+        const baseIndex = Math.floor((i / paletteSize) * dmcDataset.length);
+        const offset = Math.floor(next() * Math.min(50, dmcDataset.length / paletteSize));
+        index = (baseIndex + offset) % dmcDataset.length;
+        attempts++;
+      } while (usedIndices.has(index) && attempts < 100);
+
+      usedIndices.add(index);
+      selected.push(dmcDataset[index]);
+    }
   }
-  
+
   return selected;
 }
 
@@ -352,12 +392,12 @@ function rgbToLabApprox(rgb: [number, number, number]): [number, number, number]
   const r = rgb[0] / 255;
   const g = rgb[1] / 255;
   const b = rgb[2] / 255;
-  
+
   // Simple approximation (not accurate but fast for mock mode)
   const l = (r + g + b) / 3 * 100;
   const a = (r - g) * 127;
   const b_lab = (g - b) * 127;
-  
+
   return [l, a, b_lab];
 }
 
@@ -375,15 +415,15 @@ async function generateMockPalette(
   if (dmcDataset.length === 0) {
     throw new Error('DMC dataset failed to load');
   }
-  
+
   // Select DMC entries deterministically
-  const selectedDmc = selectDmcPalette(dmcDataset, paletteSize, seed);
-  
+  const selectedDmc = selectDmcPalette(dmcDataset, paletteSize, seed, imageData);
+
   // If we have image data, count actual pixel usage
   // Otherwise, generate synthetic distribution
   const next = createRng(seed + 1000); // Different seed for distribution
   const colorCounts = new Map<number, number>();
-  
+
   if (imageData) {
     // Count pixels per palette color
     const { data } = imageData;
@@ -391,7 +431,7 @@ async function generateMockPalette(
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
-      
+
       // Find nearest DMC color in palette
       const nearest = findNearestDmc([r, g, b], selectedDmc);
       const index = selectedDmc.indexOf(nearest);
@@ -407,16 +447,16 @@ async function generateMockPalette(
       remaining -= count;
     }
   }
-  
+
   // Build palette colors
   const totalPixels = Array.from(colorCounts.values()).reduce((sum, count) => sum + count, 0);
   const colors: PaletteColor[] = [];
-  
+
   for (let i = 0; i < selectedDmc.length; i++) {
     const dmc = selectedDmc[i];
     const count = colorCounts.get(i) || 0;
     const percent = totalPixels > 0 ? (count / totalPixels) * 100 : 0;
-    
+
     colors.push({
       rgb: dmc.rgb,
       hex: dmc.hex,
@@ -436,7 +476,7 @@ async function generateMockPalette(
       },
     });
   }
-  
+
   return colors;
 }
 
@@ -460,8 +500,8 @@ async function mockRegisterImage(
   let imageId: string;
   try {
     // Fast hash: use first 50 chars of base64 (skip data: prefix if present)
-    const base64Data = input.imageBase64.includes(',') 
-      ? input.imageBase64.split(',')[1] 
+    const base64Data = input.imageBase64.includes(',')
+      ? input.imageBase64.split(',')[1]
       : input.imageBase64;
     const hashInput = base64Data.substring(0, Math.min(50, base64Data.length));
     // Simple hash - just use the base64 chars directly (they're already safe)
@@ -514,8 +554,12 @@ async function mockGenerateBlueprintV1(
     seed: input.seed || 42,
     maxSize: input.maxSize || 2048,
     returnPreview: input.returnPreview,
+    simplification: input.simplification || 30,
+    smoothing: input.smoothing || 20,
+    minRegionSize: input.minRegionSize || 100,
+    toneWeight: input.toneWeight || 50,
   });
-  
+
   if (mockBlueprintCache.has(cacheKey)) {
     const cached = mockBlueprintCache.get(cacheKey)!;
     // If includeDmc changed, we still need to regenerate DMC matches
@@ -528,10 +572,10 @@ async function mockGenerateBlueprintV1(
   // NOTE: This delay is async and respects abort signals, so it does NOT block
   // final preview completion - requests can be cancelled and new requests started immediately
   const isFast = (input.maxSize || 2048) <= 512;
-  const latency = isFast 
-    ? 80 + Math.random() * 70 
+  const latency = isFast
+    ? 80 + Math.random() * 70
     : 250 + Math.random() * 250;
-  
+
   await delay(latency);
 
   // Check abort signal after delay (allows cancellation)
@@ -592,7 +636,7 @@ async function mockGenerateBlueprintV1(
 
       // Recolor image
       const recoloredImageData = recolorImageWithDmcPalette(imageData, dmcPalette);
-      
+
       // Convert to base64
       indexedPreviewPngBase64 = imageDataToBase64(recoloredImageData);
     } catch (err) {
@@ -608,7 +652,7 @@ async function mockGenerateBlueprintV1(
     palette.forEach((c) => {
       c.percent = (c.percent / totalPercent) * 100;
     });
-    
+
     // Fix rounding drift by adjusting the largest bucket
     const actualTotal = palette.reduce((sum, c) => sum + c.percent, 0);
     const drift = 100.0 - actualTotal;
@@ -682,8 +726,10 @@ export interface GenerateBlueprintV1Input {
   maxSize?: number;
   seed?: number;
   returnPreview?: boolean;
-  minRegionArea?: number;
-  mergeSmallRegions?: boolean;
+  simplification?: number;
+  smoothing?: number;
+  minRegionSize?: number;
+  toneWeight?: number;
   includeDmc?: boolean; // If false, skip DMC matching for faster responses
 }
 
@@ -734,14 +780,14 @@ export async function registerImage(
 
   const endpoint = `${DEMO_ORIGIN}/api/image-register`;
   let response: Response;
-  
+
   // Create abort controller with timeout (60 seconds for large images)
   const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => timeoutController.abort(), 60000);
-  
+
   // Combine signals: use provided signal if available, otherwise use timeout signal
   const fetchSignal = signal || timeoutController.signal;
-  
+
   try {
     response = await fetch(endpoint, {
       method: 'POST',
@@ -803,7 +849,7 @@ export async function generateBlueprintV1(
 
   const endpoint = `${DEMO_ORIGIN}/api/generate-blueprint-v1`;
   let response: Response;
-  
+
   try {
     response = await fetch(endpoint, {
       method: 'POST',
@@ -861,7 +907,7 @@ export async function loadDmcMatchesBatch(
 
   const endpoint = `${DEMO_ORIGIN}/api/match-dmc-batch`;
   let response: Response;
-  
+
   try {
     response = await fetch(endpoint, {
       method: 'POST',
@@ -906,8 +952,10 @@ export function getCacheKey(input: GenerateBlueprintV1Input, mode: 'fast' | 'fin
     paletteSize: input.paletteSize,
     maxSize: input.maxSize,
     seed: input.seed,
-    minRegionArea: input.minRegionArea,
-    mergeSmallRegions: input.mergeSmallRegions,
+    simplification: input.simplification,
+    smoothing: input.smoothing,
+    minRegionSize: input.minRegionSize,
+    toneWeight: input.toneWeight,
     mode,
   });
 }

@@ -16,8 +16,10 @@ export interface GenerateBlueprintV1Input {
     maxSize?: number; // Default 2048 (only used when imageBase64 is provided)
     seed?: number; // Optional seed for deterministic output (default: 42)
     returnPreview?: boolean; // If true, return indexedPreviewPngBase64 (default: false)
-    minRegionArea?: number; // Minimum region area in pixels (default: 0, meaning off)
-    mergeSmallRegions?: boolean; // If true, merge regions smaller than minRegionArea (default: false unless minRegionArea > 0)
+    simplification?: number; // 0-100 (level of artistic region merging)
+    smoothing?: number;      // 0-100 (strength of edge-preserving smoothing)
+    minRegionSize?: number;  // 0-1000 (minimum pixel area for regions)
+    toneWeight?: number;     // 0-100 (lightness vs chroma priority in clustering)
     includeDmc?: boolean; // If false, skip DMC matching for faster responses (default: true)
 }
 
@@ -159,10 +161,22 @@ function mergeSmallRegions(
     minArea: number,
     clusterLabels: number[],
     labPixels: Lab[],
-    useDeltaE: boolean = false
+    useDeltaE: boolean = false,
+    toneWeight: number = 50
 ): number[] {
     const updatedLabels = [...clusterLabels];
     let changed = true;
+
+    // Consistency: Use the same weighting as quantization
+    const wL = 0.5 + (toneWeight / 100) * 1.5; // Range 0.5 to 2.0
+    const wAB = 1.0;
+
+    const weightedDist = (p1: Lab, p2: Lab) => {
+        const dl = p1.l - p2.l;
+        const da = p1.a - p2.a;
+        const db = p1.b - p2.b;
+        return Math.sqrt(dl * dl * wL + (da * da + db * db) * wAB);
+    };
 
     while (changed) {
         changed = false;
@@ -229,9 +243,9 @@ function mergeSmallRegions(
                     b: neighborLabSum.b / pixelLabs.length,
                 };
 
-                const deltaE = deltaE76(regionMeanLab, neighborMeanLab);
-                if (deltaE < minDeltaE) {
-                    minDeltaE = deltaE;
+                const dist = weightedDist(regionMeanLab, neighborMeanLab);
+                if (dist < minDeltaE) {
+                    minDeltaE = dist;
                     bestCluster = clusterIdx;
                 }
             });
@@ -300,6 +314,56 @@ function mergeSmallRegions(
 }
 
 /**
+ * Edge-preserving smoothing (approximation of bilateral filter)
+ * 3x3 window, weights based on color similarity
+ */
+function smoothPixels(pixels: RGB[], width: number, height: number, strength: number) {
+    if (strength <= 0) return;
+
+    const original = [...pixels];
+    const sigmaColor = 10 + (strength / 100) * 50; // Map 0-100 to some reasonable range
+
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            const idx = y * width + x;
+            const center = original[idx];
+
+            let sumR = 0, sumG = 0, sumB = 0, totalW = 0;
+
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const nIdx = (y + dy) * width + (x + dx);
+                    const neighbor = original[nIdx];
+
+                    const dr = center.r - neighbor.r;
+                    const dg = center.g - neighbor.g;
+                    const db = center.b - neighbor.b;
+                    const distSq = dr * dr + dg * dg + db * db;
+
+                    // Range weight: gaussian based on color distance
+                    const wRange = Math.exp(-distSq / (2 * sigmaColor * sigmaColor));
+                    // Spatial weight: simplified (all neighbors inside 3x3 get 1.0)
+                    const w = wRange;
+
+                    sumR += neighbor.r * w;
+                    sumG += neighbor.g * w;
+                    sumB += neighbor.b * w;
+                    totalW += w;
+                }
+            }
+
+            if (totalW > 0) {
+                pixels[idx] = {
+                    r: Math.round(sumR / totalW),
+                    g: Math.round(sumG / totalW),
+                    b: Math.round(sumB / totalW)
+                };
+            }
+        }
+    }
+}
+
+/**
  * Simple k-means clustering in Lab color space
  * Uses seeded RNG for deterministic centroid initialization
  */
@@ -307,7 +371,8 @@ function quantizeLab(
     pixels: Lab[],
     k: number,
     rng: SeededRNG,
-    maxIterations: number = 20
+    maxIterations: number = 20,
+    toneWeight: number = 50
 ): { clusters: Lab[]; labels: number[] } {
     if (pixels.length === 0) return { clusters: [], labels: [] };
     if (k >= pixels.length) {
@@ -317,20 +382,48 @@ function quantizeLab(
         return { clusters: [], labels: [] };
     }
 
-    // Initialize centroids deterministically using seeded RNG (pick unique pixels)
-    let centroids: Lab[] = [];
-    const usedIndices = new Set<number>();
-    while (centroids.length < k && usedIndices.size < pixels.length) {
-        const idx = rng.randomIntMax(pixels.length);
-        if (!usedIndices.has(idx)) {
-            centroids.push({ ...pixels[idx] });
-            usedIndices.add(idx);
-        }
-    }
+    // Weight Lightness vs AB channels (Subtle bias, never zero out chroma)
+    const wL = 0.5 + (toneWeight / 100) * 1.5; // Range 0.5 to 2.0
+    const wAB = 1.0;
 
-    // If we couldn't get enough unique centroids, pad with last centroid
+    const weightedDist = (p1: Lab, p2: Lab) => {
+        const dl = p1.l - p2.l;
+        const da = p1.a - p2.a;
+        const db = p1.b - p2.b;
+        return Math.sqrt(dl * dl * wL + (da * da + db * db) * wAB);
+    };
+
+    // Initialize centroids using K-means++ for better distribution
+    let centroids: Lab[] = [];
+
+    // 1. Pick first centroid at random
+    const firstIdx = rng.randomIntMax(pixels.length);
+    centroids.push({ ...pixels[firstIdx] });
+
+    // 2. Pick subsequent centroids proportional to distance squared from existing centroids
+    const dists = new Float32Array(pixels.length).fill(Infinity);
+
     while (centroids.length < k) {
-        centroids.push({ ...centroids[centroids.length - 1] });
+        const latestCentroid = centroids[centroids.length - 1];
+        let totalDist = 0;
+
+        for (let i = 0; i < pixels.length; i++) {
+            const d = weightedDist(pixels[i], latestCentroid);
+            dists[i] = Math.min(dists[i], d * d);
+            totalDist += dists[i];
+        }
+
+        // Randomly pick next centroid based on probability distribution
+        let target = rng.random() * totalDist;
+        let pickedIdx = pixels.length - 1;
+        for (let i = 0; i < pixels.length; i++) {
+            target -= dists[i];
+            if (target <= 0) {
+                pickedIdx = i;
+                break;
+            }
+        }
+        centroids.push({ ...pixels[pickedIdx] });
     }
 
     let labels = new Array(pixels.length).fill(0);
@@ -342,7 +435,7 @@ function quantizeLab(
             let minDist = Infinity;
             let bestCluster = 0;
             centroids.forEach((centroid, i) => {
-                const dist = deltaE76(pixel, centroid);
+                const dist = weightedDist(pixel, centroid);
                 if (dist < minDist) {
                     minDist = dist;
                     bestCluster = i;
@@ -386,7 +479,7 @@ function quantizeLab(
  * Generates a blueprint v1: quantizes image into N colors and returns palette with DMC matches
  */
 // Performance timing helper (works in both Node.js and browser)
-const perfNow = typeof performance !== 'undefined' && performance.now 
+const perfNow = typeof performance !== 'undefined' && performance.now
     ? () => performance.now()
     : () => Date.now();
 
@@ -395,7 +488,7 @@ export async function generateBlueprintV1Handler(
 ): Promise<GenerateBlueprintV1Output> {
     const perfStart = perfNow();
     const perfMarks: Record<string, number> = {};
-    
+
     const {
         imageId,
         imageBase64,
@@ -403,13 +496,15 @@ export async function generateBlueprintV1Handler(
         maxSize = 2048,
         seed = 42,
         returnPreview = false,
-        minRegionArea = 0,
-        mergeSmallRegions: mergeSmallRegionsParam,
-        includeDmc = true, // New parameter: skip DMC matching for fast requests
+        simplification = 30,
+        smoothing = 20,
+        minRegionSize = 100,
+        toneWeight = 50,
+        includeDmc = true,
     } = input;
 
     // Determine if region merging should be enabled
-    const shouldMergeRegions = minRegionArea > 0 && (mergeSmallRegionsParam !== false);
+    const shouldMergeRegions = minRegionSize > 0;
 
     // Validate input
     if (!imageId && !imageBase64) {
@@ -529,6 +624,13 @@ export async function generateBlueprintV1Handler(
             };
         }
 
+        // Pre-smoothing pass if dynamic smoothing is enabled
+        if (smoothing > 0) {
+            const smoothStart = perfNow();
+            smoothPixels(pixels, width, height, smoothing);
+            perfMarks.smoothing = perfNow() - smoothStart;
+        }
+
         // Convert RGB pixels to Lab
         const labStart = perfNow();
         const labPixels = pixels.map((rgb) => rgbToLab(rgb));
@@ -537,9 +639,9 @@ export async function generateBlueprintV1Handler(
         // Initialize seeded RNG for deterministic k-means
         const rng = new SeededRNG(seed);
 
-        // Quantize using k-means in Lab space
+        // Quantize using k-means in Lab space with tone weighting
         const kmeansStart = perfNow();
-        let { clusters: labCentroids, labels } = quantizeLab(labPixels, paletteSize, rng);
+        let { clusters: labCentroids, labels } = quantizeLab(labPixels, paletteSize, rng, 20, toneWeight);
         perfMarks.kmeans = perfNow() - kmeansStart;
 
         // Region cleanup: merge small regions if enabled
@@ -553,10 +655,11 @@ export async function generateBlueprintV1Handler(
                 width,
                 height,
                 regions,
-                minRegionArea,
+                minRegionSize,
                 labels,
                 labPixels,
-                false // Use majority adjacency (simpler)
+                simplification > 50, // Use weighted distance merging for higher simplification
+                toneWeight
             );
             perfMarks.regionCleanup = perfNow() - regionStart;
         }
@@ -577,7 +680,7 @@ export async function generateBlueprintV1Handler(
         const paletteStart = perfNow();
         const palette: PaletteColor[] = [];
         const dmcStart = perfNow();
-        
+
         for (let i = 0; i < labCentroids.length; i++) {
             const count = clusterCounts[i];
             const percent = (count / totalPixels) * 100;
@@ -585,10 +688,10 @@ export async function generateBlueprintV1Handler(
             // Compute mean RGB for this cluster
             const rgb: RGB = count > 0
                 ? {
-                      r: Math.round(clusterRgbSums[i].r / count),
-                      g: Math.round(clusterRgbSums[i].g / count),
-                      b: Math.round(clusterRgbSums[i].b / count),
-                  }
+                    r: Math.round(clusterRgbSums[i].r / count),
+                    g: Math.round(clusterRgbSums[i].g / count),
+                    b: Math.round(clusterRgbSums[i].b / count),
+                }
                 : { r: 0, g: 0, b: 0 }; // Fallback if cluster is empty
 
             const hex = rgbToHex(rgb);
@@ -620,7 +723,7 @@ export async function generateBlueprintV1Handler(
                 dmcMatch,
             });
         }
-        
+
         perfMarks.paletteBuild = perfNow() - paletteStart;
         perfMarks.dmcMatching = perfNow() - dmcStart;
 
@@ -637,10 +740,10 @@ export async function generateBlueprintV1Handler(
                 const count = clusterCounts[i];
                 const rgb: RGB = count > 0
                     ? {
-                          r: Math.round(clusterRgbSums[i].r / count),
-                          g: Math.round(clusterRgbSums[i].g / count),
-                          b: Math.round(clusterRgbSums[i].b / count),
-                      }
+                        r: Math.round(clusterRgbSums[i].r / count),
+                        g: Math.round(clusterRgbSums[i].g / count),
+                        b: Math.round(clusterRgbSums[i].b / count),
+                    }
                     : { r: 0, g: 0, b: 0 };
                 clusterRgbMap[i] = rgb;
             }
@@ -672,7 +775,7 @@ export async function generateBlueprintV1Handler(
         }
 
         const totalTime = perfNow() - perfStart;
-        
+
         // Log performance metrics (only in development or when explicitly enabled)
         if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_PERF_LOGS === '1') {
             console.log(`[PERF] generateBlueprintV1 (paletteSize=${paletteSize}, maxSize=${maxSize}, includeDmc=${includeDmc}):`);
@@ -754,14 +857,28 @@ export const generateBlueprintV1Tool = {
                 description: "If true, return indexedPreviewPngBase64 with quantized preview image (default: false)",
                 default: false,
             },
-            minRegionArea: {
+            simplification: {
                 type: "number",
-                description: "Minimum region area in pixels for region cleanup (default: 0, meaning off). Recommended: 50-200 depending on maxSize.",
+                description: "0-100: Degree of artistic simplification. Higher merges similar colors into larger shapes.",
+                minimum: 0,
+                maximum: 100,
+            },
+            smoothing: {
+                type: "number",
+                description: "0-100: Pre-processing smoothing strength. Removes grain while keeping major edges.",
+                minimum: 0,
+                maximum: 100,
+            },
+            minRegionSize: {
+                type: "number",
+                description: "0-1000: Minimum pixel area for regions. Kills speckle noise.",
                 minimum: 0,
             },
-            mergeSmallRegions: {
-                type: "boolean",
-                description: "If true, merge regions smaller than minRegionArea (default: true when minRegionArea > 0, false otherwise)",
+            toneWeight: {
+                type: "number",
+                description: "0-100: Weight of lightness vs hue and chroma. Higher values preserve tonal structure.",
+                minimum: 0,
+                maximum: 100,
             },
         },
         required: ["paletteSize"],

@@ -2,13 +2,14 @@
 
 /* Design tokens - Editorial modernism paper aesthetic */
 :root {
-  --paper: #F6F1E7;
-  --paper-2: #F9F6F0;
-  --ink: #1A1A1A;
-  --muted: #6B6B6B;
-  --border: #D4D0C8;
-  --accent: #2C2C2C;
-  --accent-light: #E8E4DC;
+  --paper: #F5F2ED;
+  --paper-2: #FAF8F5;
+  --ink: #121212;
+  --muted: #767676;
+  --border: #D1CDBC;
+  --accent: #000000;
+  --accent-light: #ECEAE0;
+  --grid-color: rgba(0, 0, 0, 0.03);
 }
 
 * {
@@ -25,21 +26,44 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--paper);
   color: var(--ink);
+  background-image: 
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90号, var(--grid-color) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
+
+/* Texture overlay for paper feel */
+.paper-texture::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.04;
+  z-index: 9999;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Hairline rules for Swiss design */
+.hairline-b { border-bottom: 0.5px solid var(--border); }
+.hairline-t { border-top: 0.5px solid var(--border); }
+.hairline-l { border-left: 0.5px solid var(--border); }
+.hairline-r { border-right: 0.5px solid var(--border); }
 
 /* Custom scrollbar - paper aesthetic */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--paper-2);
+  background: var(--paper);
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

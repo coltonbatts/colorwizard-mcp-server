@@ -7,8 +7,10 @@ import type { PaletteColor, GenerateBlueprintV1Response } from '@/lib/api/bluepr
 
 export interface BlueprintParams {
   paletteSize: number;
-  minRegionArea: number;
-  mergeSmallRegions: boolean;
+  simplification: number; // 0-100
+  smoothing: number;      // 0-100
+  minRegionSize: number;  // 0-1000
+  toneWeight: number;     // 0-100
   seed: number;
 }
 
@@ -16,31 +18,31 @@ export interface BlueprintState {
   // Image state
   imageId: string | null;
   originalPreviewUrl: string | null;
-  
+
   // Parameters
   params: BlueprintParams;
-  
+
   // Response data
   lastResponse: GenerateBlueprintV1Response | null;
-  
+
   // UI state
   loading: boolean;
   error: string | null;
   mode: 'fast' | 'final';
   statusMessage: string | null;
-  
+
   // Highlight state
   highlightedColorIndex: number | null;
-  
+
   // Preview quality
   highQualityPreview: boolean; // Toggle for high quality (2048px) vs default (1024px mobile, 2048px desktop)
-  
+
   // Mock mode
   mockMode: boolean; // When true, use mock API instead of real backend
-  
+
   // Cache
   cache: Map<string, GenerateBlueprintV1Response>;
-  
+
   // Per-color DMC cache (keyed by hex string for fast lookups)
   dmcCache: Map<string, {
     ok: boolean;
@@ -48,7 +50,7 @@ export interface BlueprintState {
     alternatives?: any[];
     method?: string;
   }>;
-  
+
   // Actions
   setImageId: (imageId: string | null) => void;
   setOriginalPreviewUrl: (url: string | null) => void;
@@ -70,8 +72,10 @@ export interface BlueprintState {
 
 const defaultParams: BlueprintParams = {
   paletteSize: 18, // Default optimized for common 15-20 color range
-  minRegionArea: 40,
-  mergeSmallRegions: true,
+  simplification: 30,
+  smoothing: 20,
+  minRegionSize: 100,
+  toneWeight: 50,
   seed: 42,
 };
 
@@ -114,16 +118,16 @@ function getDefaultMockMode(): boolean {
   if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
     return false;
   }
-  
+
   // SSR-safe: return false during SSR, will be updated in useEffect on mount
   if (typeof window === 'undefined') return false;
-  
+
   // Development: default to mock mode (true) unless explicitly disabled
   // Allow override with NEXT_PUBLIC_BLUEPRINT_MOCK=0 to disable mock mode
   if (process.env.NEXT_PUBLIC_BLUEPRINT_MOCK === '0') {
     return false;
   }
-  
+
   // Default to mock mode in development for instant testing
   return true;
 }
@@ -168,7 +172,12 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
       // Silently ignore attempts to enable mock mode in production
       return;
     }
-    set({ mockMode: enabled });
+    set({
+      mockMode: enabled,
+      imageId: null,      // Clear imageId when mode changes to force re-registration
+      lastResponse: null, // Clear last response to prevent stale data display
+      cache: new Map(),   // Clear mode-specific cache
+    });
   },
   cacheResponse: (key, response) => {
     const cache = get().cache;
@@ -200,7 +209,7 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
       }
       return getDefaultMockMode();
     })();
-    
+
     set({
       imageId: null,
       originalPreviewUrl: null,
