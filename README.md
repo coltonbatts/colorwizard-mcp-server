@@ -403,6 +403,100 @@ Transforms an input image into a vector paint-by-number SVG blueprint.
 }
 ```
 
+### `generate_blueprint_v1`
+
+Quantizes an image into N perceptual colors using Lab color space, returns a palette with per-color pixel counts and DMC thread matches. Phase 1: no SVG tracing, no region adjacency, no contours.
+
+**Input Formats:**
+
+**Session mode** (recommended for multiple operations):
+```json
+{
+  "imageId": "a1b2c3d4e5f6...",
+  "paletteSize": 12
+}
+```
+
+**One-shot mode**:
+```json
+{
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVR4nGP4z8CABzGMSjNgCRYAt8pjnQuW8k0AAAAASUVORK5CYII=",
+  "paletteSize": 12,
+  "maxSize": 2048
+}
+```
+
+**Parameters:**
+- `imageId` (optional): Image ID from `image_register` - use for session-based processing
+- `imageBase64` (optional): Base64-encoded image data - use for one-shot processing
+- `paletteSize` (required): Number of colors to quantize to (positive integer)
+- `maxSize` (optional): Maximum dimension for image resize (default: 2048, only used when `imageBase64` is provided)
+
+**Output:**
+
+On success (`ok: true`):
+```json
+{
+  "ok": true,
+  "palette": [
+    {
+      "rgb": { "r": 255, "g": 0, "b": 0 },
+      "hex": "#FF0000",
+      "lab": { "l": 53.24, "a": 80.09, "b": 67.20 },
+      "count": 5000,
+      "percent": 50.0,
+      "dmcMatch": {
+        "ok": true,
+        "best": {
+          "id": "DMC-666",
+          "name": "Bright Christmas Red",
+          "hex": "#E31D42",
+          "deltaE": 8.45
+        },
+        "alternatives": [
+          {
+            "id": "DMC-321",
+            "name": "Christmas Red",
+            "hex": "#C72B3B",
+            "deltaE": 12.67
+          }
+        ],
+        "method": "lab-d65-deltae76"
+      }
+    }
+  ],
+  "totalPixels": 10000,
+  "method": "lab-kmeans-deltae76"
+}
+```
+
+On error (`ok: false`):
+```json
+{
+  "ok": false,
+  "error": "Either 'imageId' or 'imageBase64' must be provided"
+}
+```
+
+**Fields:**
+- `palette`: Array of palette colors sorted by pixel count (descending)
+  - `rgb`: RGB color values (0-255)
+  - `hex`: Hex color code
+  - `lab`: Lab color space coordinates
+  - `count`: Number of pixels assigned to this color
+  - `percent`: Percentage of total pixels (0-100)
+  - `dmcMatch`: DMC thread match for this palette color
+- `totalPixels`: Total number of pixels in the processed image
+- `method`: Quantization method used (`lab-kmeans-deltae76`)
+
+**Notes:**
+- Uses k-means clustering in Lab color space for perceptually uniform quantization
+- Palette colors are sorted by pixel count (most common first)
+- Each palette color includes a DMC thread match using the same matching algorithm as `match_dmc`
+- Supports both session mode (using `imageId`) and one-shot mode (using `imageBase64`)
+- Images are automatically resized to `maxSize` for memory efficiency
+- Phase 1 implementation: no SVG tracing, no region adjacency, no contours
+
 ## Adding a New Tool
 
 To add a new tool, follow this template:

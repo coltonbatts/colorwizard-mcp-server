@@ -426,6 +426,35 @@ export class ColorWizardServer {
                 }
             }
 
+            if (toolName === "generate_blueprint_v1") {
+                const schema = z.object({
+                    imageId: z.string().optional(),
+                    imageBase64: z.string().optional(),
+                    paletteSize: z.number().int().positive(),
+                    maxSize: z.number().positive().optional(),
+                }).refine((data) => data.imageId || data.imageBase64, {
+                    message: "Either 'imageId' or 'imageBase64' must be provided",
+                });
+
+                const parseResult = schema.safeParse(request.params.arguments);
+                if (!parseResult.success) {
+                    throw new McpError(
+                        ErrorCode.InvalidParams,
+                        parseResult.error.issues[0]?.message || "Invalid parameters for generate_blueprint_v1"
+                    );
+                }
+
+                const result = await toolHandlers.generate_blueprint_v1(parseResult.data);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(result, null, 2),
+                        },
+                    ],
+                };
+            }
+
             throw new McpError(
                 ErrorCode.MethodNotFound,
                 `Unknown tool: ${toolName}`

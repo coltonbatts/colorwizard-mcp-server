@@ -10,6 +10,7 @@ import { analyzeImageRegion } from "./vision.js";
 import { vibeShifter, type ColorArray } from "./vibe.js";
 import { generateStitchPattern } from "./pattern.js";
 import { generateBlueprint } from "../lib/blueprint/generateBlueprint.js";
+import { generateBlueprintV1Tool, generateBlueprintV1Handler, type GenerateBlueprintV1Input } from "./generate_blueprint_v1.js";
 
 /**
  * Tool definition type
@@ -165,6 +166,7 @@ export const tools: ToolDefinition[] = [
             required: ["image_path"],
         },
     },
+    generateBlueprintV1Tool,
 ];
 
 /**
@@ -233,5 +235,8 @@ export const toolHandlers: Record<string, ToolHandler> = {
             epsilon,
             maxDim: max_dim,
         });
+    },
+    generate_blueprint_v1: async (args: unknown) => {
+        return await generateBlueprintV1Handler(args as GenerateBlueprintV1Input);
     },
 };

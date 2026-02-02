@@ -1,0 +1,154 @@
+{
+  "ok": true,
+  "palette": [
+    {
+      "rgb": { "r": 255, "g": 0, "b": 0 },
+      "hex": "#FF0000",
+      "lab": { "l": 53.24, "a": 80.09, "b": 67.20 },
+      "count": 5000,
+      "percent": 50.0,
+      "dmcMatch": {
+        "ok": true,
+        "best": {
+          "id": "DMC-666",
+          "name": "Bright Christmas Red",
+          "hex": "#E31D42",
+          "deltaE": 8.45
+        },
+        "alternatives": [
+          {
+            "id": "DMC-321",
+            "name": "Christmas Red",
+            "hex": "#C72B3B",
+            "deltaE": 12.67
+          },
+          {
+            "id": "DMC-498",
+            "name": "Christmas Red Dark",
+            "hex": "#A91D2D",
+            "deltaE": 15.23
+          },
+          {
+            "id": "DMC-347",
+            "name": "Salmon Very Dark",
+            "hex": "#BF1F2C",
+            "deltaE": 18.12
+          },
+          {
+            "id": "DMC-349",
+            "name": "Coral Red Very Dark",
+            "hex": "#C91F2C",
+            "deltaE": 19.45
+          },
+          {
+            "id": "DMC-350",
+            "name": "Coral Red Dark",
+            "hex": "#E31D2C",
+            "deltaE": 20.67
+          }
+        ],
+        "method": "lab-d65-deltae76"
+      }
+    },
+    {
+      "rgb": { "r": 0, "g": 255, "b": 0 },
+      "hex": "#00FF00",
+      "lab": { "l": 87.74, "a": -86.18, "b": 83.18 },
+      "count": 3000,
+      "percent": 30.0,
+      "dmcMatch": {
+        "ok": true,
+        "best": {
+          "id": "DMC-703",
+          "name": "Chartreuse",
+          "hex": "#7FB347",
+          "deltaE": 12.34
+        },
+        "alternatives": [
+          {
+            "id": "DMC-704",
+            "name": "Chartreuse Bright",
+            "hex": "#87C653",
+            "deltaE": 15.67
+          },
+          {
+            "id": "DMC-701",
+            "name": "Green Light",
+            "hex": "#7FB347",
+            "deltaE": 18.90
+          },
+          {
+            "id": "DMC-702",
+            "name": "Green",
+            "hex": "#6B8E23",
+            "deltaE": 22.45
+          },
+          {
+            "id": "DMC-989",
+            "name": "Forest Green",
+            "hex": "#228B22",
+            "deltaE": 25.12
+          },
+          {
+            "id": "DMC-986",
+            "name": "Forest Green Very Dark",
+            "hex": "#1B5E20",
+            "deltaE": 28.34
+          }
+        ],
+        "method": "lab-d65-deltae76"
+      }
+    },
+    {
+      "rgb": { "r": 0, "g": 0, "b": 255 },
+      "hex": "#0000FF",
+      "lab": { "l": 32.30, "a": 79.19, "b": -107.86 },
+      "count": 2000,
+      "percent": 20.0,
+      "dmcMatch": {
+        "ok": true,
+        "best": {
+          "id": "DMC-798",
+          "name": "Delft Blue Dark",
+          "hex": "#1E3A8A",
+          "deltaE": 10.23
+        },
+        "alternatives": [
+          {
+            "id": "DMC-799",
+            "name": "Delft Blue Medium",
+            "hex": "#3B82F6",
+            "deltaE": 13.45
+          },
+          {
+            "id": "DMC-800",
+            "name": "Delft Blue Pale",
+            "hex": "#60A5FA",
+            "deltaE": 16.78
+          },
+          {
+            "id": "DMC-809",
+            "name": "Delft",
+            "hex": "#1E40AF",
+            "deltaE": 19.12
+          },
+          {
+            "id": "DMC-813",
+            "name": "Blue Light",
+            "hex": "#3B82F6",
+            "deltaE": 22.34
+          },
+          {
+            "id": "DMC-814",
+            "name": "Garnet",
+            "hex": "#1E3A8A",
+            "deltaE": 25.67
+          }
+        ],
+        "method": "lab-d65-deltae76"
+      }
+    }
+  ],
+  "totalPixels": 10000,
+  "method": "lab-kmeans-deltae76"
+}

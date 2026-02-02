@@ -39,7 +39,7 @@ export interface SampleColorOutput {
 /**
  * Cached image data structure
  */
-interface CachedImage {
+export interface CachedImage {
     buffer: Buffer; // Raw RGBA buffer
     width: number;
     height: number;
@@ -86,7 +86,7 @@ function rgbToHex(rgb: RGB): string {
 /**
  * Extracts base64 data from data URL if present
  */
-function extractBase64(data: string): string {
+export function extractBase64(data: string): string {
     // Handle data URL format: data:image/png;base64,<base64>
     if (data.includes(",")) {
         return data.split(",")[1];
@@ -108,7 +108,7 @@ export function generateCacheKey(base64Data: string, maxSize: number): string {
 /**
  * Gets cached image or null if not found
  */
-function getCachedImage(key: string): CachedImage | null {
+export function getCachedImage(key: string): CachedImage | null {
     const cached = imageCache.get(key);
     if (cached) {
         cached.lastAccessed = Date.now();
