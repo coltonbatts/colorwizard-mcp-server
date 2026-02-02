@@ -285,10 +285,11 @@ describe('generate_blueprint_v1 tool', () => {
     });
 
     describe('deterministic behavior', () => {
-        it('should produce consistent results for same input', async () => {
+        it('should produce identical results for same input and seed', async () => {
             const input: GenerateBlueprintV1Input = {
                 imageBase64: RED_SQUARE_BASE64,
                 paletteSize: 3,
+                seed: 12345,
             };
 
             const result1 = await generateBlueprintV1Handler(input);
@@ -297,12 +298,128 @@ describe('generate_blueprint_v1 tool', () => {
             expect(result1.ok).toBe(true);
             expect(result2.ok).toBe(true);
             
-            // Results should have same structure and counts
+            // Results should be identical with same seed
             expect(result1.totalPixels).toBe(result2.totalPixels);
             expect(result1.palette?.length).toBe(result2.palette?.length);
             
-            // Note: k-means uses random initialization, so exact colors may differ
-            // but structure and counts should be consistent
+            // Verify exact palette match
+            if (result1.palette && result2.palette) {
+                expect(result1.palette.length).toBe(result2.palette.length);
+                for (let i = 0; i < result1.palette.length; i++) {
+                    expect(result1.palette[i].rgb.r).toBe(result2.palette[i].rgb.r);
+                    expect(result1.palette[i].rgb.g).toBe(result2.palette[i].rgb.g);
+                    expect(result1.palette[i].rgb.b).toBe(result2.palette[i].rgb.b);
+                    expect(result1.palette[i].count).toBe(result2.palette[i].count);
+                    expect(result1.palette[i].percent).toBe(result2.palette[i].percent);
+                }
+            }
+        });
+
+        it('should produce different results for different seeds', async () => {
+            const input1: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 5,
+                seed: 11111,
+            };
+
+            const input2: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 5,
+                seed: 99999,
+            };
+
+            const result1 = await generateBlueprintV1Handler(input1);
+            const result2 = await generateBlueprintV1Handler(input2);
+
+            expect(result1.ok).toBe(true);
+            expect(result2.ok).toBe(true);
+            expect(result1.totalPixels).toBe(result2.totalPixels);
+            
+            // With different seeds, results may differ (though they might coincidentally match)
+            // At minimum, verify both produce valid results
+            expect(result1.palette).toBeDefined();
+            expect(result2.palette).toBeDefined();
+        });
+
+        it('should use default seed when seed is not provided', async () => {
+            const input1: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+                seed: 42, // Default seed
+            };
+
+            const input2: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+                // No seed provided, should default to 42
+            };
+
+            const result1 = await generateBlueprintV1Handler(input1);
+            const result2 = await generateBlueprintV1Handler(input2);
+
+            expect(result1.ok).toBe(true);
+            expect(result2.ok).toBe(true);
+            
+            // Results should be identical (both using seed 42)
+            if (result1.palette && result2.palette) {
+                expect(result1.palette.length).toBe(result2.palette.length);
+                for (let i = 0; i < result1.palette.length; i++) {
+                    expect(result1.palette[i].rgb.r).toBe(result2.palette[i].rgb.r);
+                    expect(result1.palette[i].rgb.g).toBe(result2.palette[i].rgb.g);
+                    expect(result1.palette[i].rgb.b).toBe(result2.palette[i].rgb.b);
+                    expect(result1.palette[i].count).toBe(result2.palette[i].count);
+                }
+            }
+        });
+    });
+
+    describe('preview image', () => {
+        it('should return preview image when returnPreview is true', async () => {
+            const input: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+                returnPreview: true,
+            };
+
+            const result = await generateBlueprintV1Handler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.indexedPreviewPngBase64).toBeDefined();
+            expect(typeof result.indexedPreviewPngBase64).toBe('string');
+            expect(result.indexedPreviewPngBase64!.length).toBeGreaterThan(0);
+            
+            // Verify it's valid base64 PNG (starts with PNG header when decoded)
+            const previewBuffer = Buffer.from(result.indexedPreviewPngBase64!, 'base64');
+            // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+            expect(previewBuffer[0]).toBe(0x89);
+            expect(previewBuffer[1]).toBe(0x50); // P
+            expect(previewBuffer[2]).toBe(0x4E); // N
+            expect(previewBuffer[3]).toBe(0x47); // G
+        });
+
+        it('should not return preview image when returnPreview is false', async () => {
+            const input: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+                returnPreview: false,
+            };
+
+            const result = await generateBlueprintV1Handler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.indexedPreviewPngBase64).toBeUndefined();
+        });
+
+        it('should not return preview image when returnPreview is not provided', async () => {
+            const input: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+            };
+
+            const result = await generateBlueprintV1Handler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.indexedPreviewPngBase64).toBeUndefined();
         });
     });
 });

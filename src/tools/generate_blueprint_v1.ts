@@ -7,12 +7,15 @@ import sharp from "sharp";
 import { rgbToLab, deltaE76, type RGB, type Lab } from "../lib/color/lab.js";
 import { matchDmcHandler, type MatchDmcOutput } from "./match_dmc.js";
 import { getCachedImage, generateCacheKey, extractBase64, type CachedImage } from "./sample_color.js";
+import { SeededRNG } from "../lib/rng.js";
 
 export interface GenerateBlueprintV1Input {
     imageId?: string; // Image ID from image_register (alternative to imageBase64)
     imageBase64?: string; // Base64-encoded image data (alternative to imageId)
     paletteSize: number; // Number of colors to quantize to
     maxSize?: number; // Default 2048 (only used when imageBase64 is provided)
+    seed?: number; // Optional seed for deterministic output (default: 42)
+    returnPreview?: boolean; // If true, return indexedPreviewPngBase64 (default: false)
 }
 
 export interface PaletteColor {
@@ -34,6 +37,7 @@ export interface GenerateBlueprintV1Output {
     palette?: PaletteColor[];
     totalPixels?: number;
     method?: string;
+    indexedPreviewPngBase64?: string; // Base64-encoded PNG preview (quantized image)
     error?: string;
 }
 
@@ -49,10 +53,12 @@ function rgbToHex(rgb: RGB): string {
 
 /**
  * Simple k-means clustering in Lab color space
+ * Uses seeded RNG for deterministic centroid initialization
  */
 function quantizeLab(
     pixels: Lab[],
     k: number,
+    rng: SeededRNG,
     maxIterations: number = 20
 ): { clusters: Lab[]; labels: number[] } {
     if (pixels.length === 0) return { clusters: [], labels: [] };
@@ -63,11 +69,11 @@ function quantizeLab(
         return { clusters: [], labels: [] };
     }
 
-    // Initialize centroids randomly (pick unique pixels)
+    // Initialize centroids deterministically using seeded RNG (pick unique pixels)
     let centroids: Lab[] = [];
     const usedIndices = new Set<number>();
     while (centroids.length < k && usedIndices.size < pixels.length) {
-        const idx = Math.floor(Math.random() * pixels.length);
+        const idx = rng.randomIntMax(pixels.length);
         if (!usedIndices.has(idx)) {
             centroids.push({ ...pixels[idx] });
             usedIndices.add(idx);
@@ -134,7 +140,7 @@ function quantizeLab(
 export async function generateBlueprintV1Handler(
     input: GenerateBlueprintV1Input
 ): Promise<GenerateBlueprintV1Output> {
-    const { imageId, imageBase64, paletteSize, maxSize = 2048 } = input;
+    const { imageId, imageBase64, paletteSize, maxSize = 2048, seed = 42, returnPreview = false } = input;
 
     // Validate input
     if (!imageId && !imageBase64) {
@@ -255,8 +261,11 @@ export async function generateBlueprintV1Handler(
         // Convert RGB pixels to Lab
         const labPixels = pixels.map((rgb) => rgbToLab(rgb));
 
+        // Initialize seeded RNG for deterministic k-means
+        const rng = new SeededRNG(seed);
+
         // Quantize using k-means in Lab space
-        const { clusters: labCentroids, labels } = quantizeLab(labPixels, paletteSize);
+        const { clusters: labCentroids, labels } = quantizeLab(labPixels, paletteSize, rng);
 
         // Count pixels per cluster and compute mean RGB for each cluster
         const clusterCounts = new Array(paletteSize).fill(0);
@@ -309,11 +318,54 @@ export async function generateBlueprintV1Handler(
         // Sort palette by count (descending)
         palette.sort((a, b) => b.count - a.count);
 
+        // Generate preview image if requested
+        let indexedPreviewPngBase64: string | undefined;
+        if (returnPreview) {
+            // Create a map from original cluster index to RGB (before palette sorting)
+            const clusterRgbMap: RGB[] = [];
+            for (let i = 0; i < paletteSize; i++) {
+                const count = clusterCounts[i];
+                const rgb: RGB = count > 0
+                    ? {
+                          r: Math.round(clusterRgbSums[i].r / count),
+                          g: Math.round(clusterRgbSums[i].g / count),
+                          b: Math.round(clusterRgbSums[i].b / count),
+                      }
+                    : { r: 0, g: 0, b: 0 };
+                clusterRgbMap[i] = rgb;
+            }
+
+            // Create preview image buffer: replace each pixel with its cluster mean RGB
+            const previewPixels = new Uint8Array(width * height * 3);
+            for (let i = 0; i < labels.length; i++) {
+                const label = labels[i];
+                const rgb = clusterRgbMap[label];
+                const pixelIdx = i * 3;
+                previewPixels[pixelIdx] = rgb.r;
+                previewPixels[pixelIdx + 1] = rgb.g;
+                previewPixels[pixelIdx + 2] = rgb.b;
+            }
+
+            // Encode as PNG using sharp
+            const previewBuffer = await sharp(previewPixels, {
+                raw: {
+                    width,
+                    height,
+                    channels: 3,
+                },
+            })
+                .png()
+                .toBuffer();
+
+            indexedPreviewPngBase64 = previewBuffer.toString("base64");
+        }
+
         return {
             ok: true,
             palette,
             totalPixels,
             method: "lab-kmeans-deltae76",
+            ...(indexedPreviewPngBase64 && { indexedPreviewPngBase64 }),
         };
     } catch (error) {
         if (error instanceof Error) {
@@ -367,6 +419,15 @@ export const generateBlueprintV1Tool = {
                 type: "number",
                 description: "Maximum dimension for image resize (default: 2048, only used when imageBase64 is provided)",
                 default: 2048,
+            },
+            seed: {
+                type: "number",
+                description: "Optional seed for deterministic output (default: 42)",
+            },
+            returnPreview: {
+                type: "boolean",
+                description: "If true, return indexedPreviewPngBase64 with quantized preview image (default: false)",
+                default: false,
             },
         },
         required: ["paletteSize"],

@@ -431,6 +431,8 @@ Quantizes an image into N perceptual colors using Lab color space, returns a pal
 - `imageBase64` (optional): Base64-encoded image data - use for one-shot processing
 - `paletteSize` (required): Number of colors to quantize to (positive integer)
 - `maxSize` (optional): Maximum dimension for image resize (default: 2048, only used when `imageBase64` is provided)
+- `seed` (optional): Seed for deterministic output (default: 42). Same input + same seed produces identical results
+- `returnPreview` (optional): If `true`, returns `indexedPreviewPngBase64` with quantized preview image (default: `false`)
 
 **Output:**
 
@@ -466,9 +468,12 @@ On success (`ok: true`):
     }
   ],
   "totalPixels": 10000,
-  "method": "lab-kmeans-deltae76"
+  "method": "lab-kmeans-deltae76",
+  "indexedPreviewPngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVR4nGP4z8CABzGMSjNgCRYAt8pjnQuW8k0AAAAASUVORK5CYII="
 }
 ```
+
+**Note:** `indexedPreviewPngBase64` is only included when `returnPreview: true`. It contains a base64-encoded PNG image where each pixel is replaced by its cluster mean color, at the resized working dimensions (`maxSize`).
 
 On error (`ok: false`):
 ```json
@@ -488,6 +493,7 @@ On error (`ok: false`):
   - `dmcMatch`: DMC thread match for this palette color
 - `totalPixels`: Total number of pixels in the processed image
 - `method`: Quantization method used (`lab-kmeans-deltae76`)
+- `indexedPreviewPngBase64` (optional): Base64-encoded PNG preview image showing quantized result. Only present when `returnPreview: true`.
 
 **Notes:**
 - Uses k-means clustering in Lab color space for perceptually uniform quantization
@@ -495,6 +501,8 @@ On error (`ok: false`):
 - Each palette color includes a DMC thread match using the same matching algorithm as `match_dmc`
 - Supports both session mode (using `imageId`) and one-shot mode (using `imageBase64`)
 - Images are automatically resized to `maxSize` for memory efficiency
+- **Deterministic output**: Same input + same `seed` produces identical results. Default seed is `42`.
+- **Preview image**: When `returnPreview: true`, returns a quantized preview where each pixel is replaced by its cluster mean color, at the resized working dimensions.
 - Phase 1 implementation: no SVG tracing, no region adjacency, no contours
 
 ## Adding a New Tool
