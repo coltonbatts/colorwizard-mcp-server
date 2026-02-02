@@ -839,6 +839,116 @@ npm run demo:build
 npm run demo:start
 ```
 
+## ThreeJS Live Blueprint UI
+
+A production-grade Next.js UI with Three.js for realtime blueprint preview and interaction.
+
+### Running the ThreeJS UI
+
+**Prerequisites:**
+1. Start the demo server (required for API endpoints):
+   ```bash
+   npm run demo
+   ```
+   This runs on `http://localhost:3001` by default.
+
+2. In a separate terminal, start the Next.js dev server:
+   ```bash
+   npm run next:dev
+   ```
+   This runs on `http://localhost:3000` by default.
+
+3. Open `http://localhost:3000/three-blueprint` in your browser.
+
+### Building for Production
+
+```bash
+npm run next:build
+npm run next:start
+```
+
+### Features
+
+- **Realtime Preview**: Three.js canvas with instant updates as you adjust parameters
+- **Two-Stage Rendering**: 
+  - Fast preview (512px) while dragging sliders
+  - Final preview (2048px) after user stops adjusting
+- **Smart Caching**: LRU cache prevents redundant API calls
+- **Request Cancellation**: AbortController cancels stale requests automatically
+- **Color Highlighting**: Click palette swatches to highlight that color in the preview
+- **Mobile-Friendly**: Touch-safe controls and responsive layout
+- **Debounced Controls**: Smooth interaction without flickering
+
+### Architecture
+
+The ThreeJS UI is built with:
+
+- **Next.js 16** (App Router)
+- **React Three Fiber** (`@react-three/fiber`) for Three.js integration
+- **Drei** (`@react-three/drei`) for helpers (OrbitControls, Grid)
+- **Zustand** for state management
+- **Tailwind CSS** for styling
+
+### File Structure
+
+```
+app/
+├── three-blueprint/
+│   └── page.tsx              # Main page component
+├── layout.tsx                 # Root layout
+└── globals.css                # Global styles
+
+components/
+├── three/
+│   ├── BlueprintCanvas.tsx    # Three.js canvas wrapper
+│   └── TexturePlane.tsx      # Shader-based texture plane with highlighting
+├── controls/
+│   └── BlueprintControls.tsx # Parameter sliders and controls
+└── palette/
+    └── PalettePanel.tsx      # Color swatches with DMC matches
+
+lib/
+├── api/
+│   └── blueprint.ts          # API client helpers
+└── preview/
+    └── texture.ts            # Base64 to Three.js texture utilities
+
+store/
+└── blueprintStore.ts         # Zustand store for state management
+```
+
+### API Endpoints Required
+
+The UI expects the demo server (`demo/server.ts`) to be running with these endpoints:
+
+- `POST /api/image-register`: Register image and get `imageId`
+  - Input: `{ imageBase64: string, maxSize?: number }`
+  - Output: `{ ok: boolean, imageId?: string, width?: number, height?: number }`
+
+- `POST /api/generate-blueprint-v1`: Generate blueprint
+  - Input: `{ imageId: string, paletteSize: number, maxSize?: number, seed?: number, returnPreview?: boolean, minRegionArea?: number, mergeSmallRegions?: boolean }`
+  - Output: `{ ok: boolean, palette?: PaletteColor[], indexedPreviewPngBase64?: string }`
+
+### Configuration
+
+Set the API base URL via environment variable:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:3001 npm run next:dev
+```
+
+Defaults to `http://localhost:3001` if not set.
+
+### Performance Optimizations
+
+- **Debouncing**: 300ms delay before triggering preview generation
+- **Two-stage rendering**: Fast preview (512px) → Final preview (2048px) after 700ms pause
+- **Request cancellation**: AbortController cancels stale requests
+- **Response caching**: LRU cache (max 20 entries) prevents redundant API calls
+- **Request ID guards**: Ignores stale responses using request ID tracking
+- **Texture disposal**: Properly disposes Three.js textures to prevent memory leaks
+- **Nearest-neighbor filtering**: Crisp pixel rendering for indexed previews
+
 ## License
 
 ISC
