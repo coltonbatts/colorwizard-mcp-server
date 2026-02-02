@@ -187,6 +187,164 @@ On error (`ok: false`):
 - The dataset contains 500+ DMC thread colors
 - If the DMC dataset (`src/data/dmc.json`) is not available, the tool will return `ok: false` with an error message
 
+### `image_register`
+
+Registers a base64-encoded image and returns an `imageId` for efficient session-based color sampling. Use this for real-time thumb-drag scenarios where you'll sample multiple times from the same image without sending the base64 data each time.
+
+**Input:**
+```json
+{
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVR4nGP4z8CABzGMSjNgCRYAt8pjnQuW8k0AAAAASUVORK5CYII=",
+  "maxSize": 2048
+}
+```
+
+**Output:**
+
+On success (`ok: true`):
+```json
+{
+  "ok": true,
+  "imageId": "a1b2c3d4e5f6...",
+  "width": 10,
+  "height": 10
+}
+```
+
+On error (`ok: false`):
+```json
+{
+  "ok": false,
+  "error": "Invalid base64 image data"
+}
+```
+
+**Fields:**
+- `imageId`: SHA-256 hash-based identifier for the registered image (stable across calls with same image and maxSize)
+- `width`: Image width in pixels after optional resizing
+- `height`: Image height in pixels after optional resizing
+- `maxSize`: Maximum dimension for image resize (default: 2048). Images larger than this will be resized while preserving aspect ratio.
+
+**Notes:**
+- The `imageId` is a stable hash based on the image data and `maxSize` parameter
+- Registered images are cached in memory for fast subsequent sampling
+- Use this tool before calling `sample_color` multiple times with the same image for optimal performance
+
+### `sample_color`
+
+Samples a pixel or small region from an image and returns RGB/hex/Lab color data plus nearest DMC thread match. Supports two usage patterns:
+
+1. **One-shot mode**: Provide `imageBase64` directly (backward compatible)
+2. **Session mode**: Use `imageId` from `image_register` for efficient repeated sampling
+
+**Input Formats:**
+
+**Session mode** (recommended for multiple samples):
+```json
+{
+  "imageId": "a1b2c3d4e5f6...",
+  "x": 0.5,
+  "y": 0.5,
+  "radius": 0
+}
+```
+
+**One-shot mode** (backward compatible):
+```json
+{
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVR4nGP4z8CABzGMSjNgCRYAt8pjnQuW8k0AAAAASUVORK5CYII=",
+  "x": 0.5,
+  "y": 0.5,
+  "radius": 0,
+  "maxSize": 2048
+}
+```
+
+**Parameters:**
+- `imageId` (optional): Image ID from `image_register` - use for session-based sampling
+- `imageBase64` (optional): Base64-encoded image data - use for one-shot sampling
+- `x`: Normalized X coordinate (0.0 to 1.0, where 0.0 is left edge, 1.0 is right edge)
+- `y`: Normalized Y coordinate (0.0 to 1.0, where 0.0 is top edge, 1.0 is bottom edge)
+- `radius`: Sampling radius in pixels (default: 0 for single pixel). When > 0, averages colors in a square region
+- `maxSize`: Maximum dimension for image resize (default: 2048, only used when `imageBase64` is provided)
+
+**Output:**
+
+On success (`ok: true`):
+```json
+{
+  "ok": true,
+  "rgb": { "r": 255, "g": 0, "b": 0 },
+  "hex": "#FF0000",
+  "lab": { "l": 53.24, "a": 80.09, "b": 67.20 },
+  "match": {
+    "ok": true,
+    "best": {
+      "id": "DMC-666",
+      "name": "Bright Christmas Red",
+      "hex": "#E31D42",
+      "deltaE": 8.45
+    },
+    "alternatives": [
+      {
+        "id": "DMC-321",
+        "name": "Christmas Red",
+        "hex": "#C72B3B",
+        "deltaE": 12.67
+      }
+    ],
+    "method": "lab-d65-deltae76"
+  },
+  "method": "lab-d65-deltae76",
+  "inputNormalized": {
+    "rgb": { "r": 255, "g": 0, "b": 0 },
+    "hex": "#FF0000"
+  }
+}
+```
+
+On error (`ok: false`):
+```json
+{
+  "ok": false,
+  "error": "Image with ID 'abc123' not found in cache. Register the image first using image_register."
+}
+```
+
+**Usage Patterns:**
+
+**One-shot mode** (for single samples):
+```json
+{
+  "imageBase64": "<base64 data>",
+  "x": 0.5,
+  "y": 0.5
+}
+```
+
+**Session mode** (for real-time thumb-drag):
+1. Register image once:
+```json
+{
+  "imageBase64": "<base64 data>"
+}
+```
+→ Returns `{ "ok": true, "imageId": "abc123...", "width": 800, "height": 600 }`
+
+2. Sample multiple times using `imageId`:
+```json
+{ "imageId": "abc123...", "x": 0.1, "y": 0.2 }
+{ "imageId": "abc123...", "x": 0.3, "y": 0.4 }
+{ "imageId": "abc123...", "x": 0.5, "y": 0.6 }
+```
+
+**Notes:**
+- Session mode avoids sending base64 data on every call, making it ideal for real-time interactions
+- Images are cached in memory (LRU eviction, max 5 images)
+- Coordinates are normalized (0.0-1.0), making them resolution-independent
+- When `radius > 0`, colors are averaged across a square region centered at (x, y)
+- The tool automatically handles data URL format (`data:image/png;base64,...`)
+
 ### `analyze_image_region`
 
 Extracts precise pixel data from a local image file at specified coordinates.

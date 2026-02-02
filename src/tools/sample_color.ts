@@ -9,11 +9,12 @@ import { rgbToLab, type RGB, type Lab } from "../lib/color/lab.js";
 import { matchDmcHandler, type MatchDmcOutput } from "./match_dmc.js";
 
 export interface SampleColorInput {
-    imageBase64: string;
+    imageId?: string; // Image ID from image_register (alternative to imageBase64)
+    imageBase64?: string; // Base64-encoded image data (alternative to imageId)
     x: number; // Normalized 0-1
     y: number; // Normalized 0-1
     radius?: number; // Default 0 (single pixel)
-    maxSize?: number; // Default 2048
+    maxSize?: number; // Default 2048 (only used when imageBase64 is provided)
 }
 
 export interface SampleColorOutput {
@@ -95,8 +96,9 @@ function extractBase64(data: string): string {
 
 /**
  * Generates a cache key from image base64 data and maxSize
+ * Exported for use by image_register
  */
-function generateCacheKey(base64Data: string, maxSize: number): string {
+export function generateCacheKey(base64Data: string, maxSize: number): string {
     const hash = createHash("sha256");
     hash.update(base64Data);
     hash.update(String(maxSize));
@@ -143,10 +145,18 @@ function setCachedImage(key: string, image: CachedImage): void {
 }
 
 /**
- * Samples color from base64 image
+ * Samples color from base64 image or cached image by ID
  */
 export async function sampleColorHandler(input: SampleColorInput): Promise<SampleColorOutput> {
-    const { imageBase64, x, y, radius = 0, maxSize = 2048 } = input;
+    const { imageId, imageBase64, x, y, radius = 0, maxSize = 2048 } = input;
+
+    // Validate that either imageId or imageBase64 is provided
+    if (!imageId && !imageBase64) {
+        return {
+            ok: false,
+            error: "Either 'imageId' or 'imageBase64' must be provided",
+        };
+    }
 
     // Validate normalized coordinates
     if (x < 0 || x > 1 || y < 0 || y > 1) {
@@ -164,72 +174,94 @@ export async function sampleColorHandler(input: SampleColorInput): Promise<Sampl
     }
 
     try {
-        // Extract base64 data
-        const base64Data = extractBase64(imageBase64);
-        
-        // Check cache for decoded+resized image
-        const cacheKey = generateCacheKey(base64Data, maxSize);
-        let cachedImage = getCachedImage(cacheKey);
+        let cachedImage: CachedImage | null = null;
         let width: number;
         let height: number;
         let fullImageBuffer: Buffer;
         
-        if (cachedImage) {
-            // Use cached image
+        if (imageId) {
+            // Try to get from cache using imageId
+            cachedImage = getCachedImage(imageId);
+            if (!cachedImage) {
+                return {
+                    ok: false,
+                    error: `Image with ID '${imageId}' not found in cache. Register the image first using image_register.`,
+                };
+            }
             width = cachedImage.width;
             height = cachedImage.height;
             fullImageBuffer = cachedImage.buffer;
-        } else {
-            // Decode base64 to buffer
-            const imageBuffer = Buffer.from(base64Data, "base64");
-
-            // Load image with sharp and get metadata
-            let image = sharp(imageBuffer);
-            const metadata = await image.metadata();
+        } else if (imageBase64) {
+            // Extract base64 data
+            const base64Data = extractBase64(imageBase64);
             
-            if (!metadata.width || !metadata.height) {
-                return {
-                    ok: false,
-                    error: "Unable to read image dimensions",
-                };
-            }
-
-            // Resize if needed (preserve aspect ratio)
-            const originalWidth = metadata.width;
-            const originalHeight = metadata.height;
-            const maxDimension = Math.max(originalWidth, originalHeight);
+            // Check cache for decoded+resized image
+            const cacheKey = generateCacheKey(base64Data, maxSize);
+            cachedImage = getCachedImage(cacheKey);
             
-            if (maxDimension > maxSize) {
-                const scale = maxSize / maxDimension;
-                const newWidth = Math.round(originalWidth * scale);
-                const newHeight = Math.round(originalHeight * scale);
-                image = image.resize(newWidth, newHeight, {
-                    fit: "inside",
-                    withoutEnlargement: true,
+            if (cachedImage) {
+                // Use cached image
+                width = cachedImage.width;
+                height = cachedImage.height;
+                fullImageBuffer = cachedImage.buffer;
+            } else {
+                // Decode base64 to buffer
+                const imageBuffer = Buffer.from(base64Data, "base64");
+
+                // Load image with sharp and get metadata
+                let image = sharp(imageBuffer);
+                const metadata = await image.metadata();
+                
+                if (!metadata.width || !metadata.height) {
+                    return {
+                        ok: false,
+                        error: "Unable to read image dimensions",
+                    };
+                }
+
+                // Resize if needed (preserve aspect ratio)
+                const originalWidth = metadata.width;
+                const originalHeight = metadata.height;
+                const maxDimension = Math.max(originalWidth, originalHeight);
+                
+                if (maxDimension > maxSize) {
+                    const scale = maxSize / maxDimension;
+                    const newWidth = Math.round(originalWidth * scale);
+                    const newHeight = Math.round(originalHeight * scale);
+                    image = image.resize(newWidth, newHeight, {
+                        fit: "inside",
+                        withoutEnlargement: true,
+                    });
+                }
+
+                // Get final dimensions after resize
+                const resizedMetadata = await image.metadata();
+                width = resizedMetadata.width || originalWidth;
+                height = resizedMetadata.height || originalHeight;
+                
+                // Get full resized image as raw RGBA buffer for caching
+                // Ensure we get RGBA format (4 channels)
+                const { data: fullImageData } = await image
+                    .ensureAlpha()
+                    .raw()
+                    .toBuffer({ resolveWithObject: true });
+                
+                fullImageBuffer = fullImageData;
+                
+                // Cache the decoded+resized image
+                setCachedImage(cacheKey, {
+                    buffer: fullImageBuffer,
+                    width,
+                    height,
+                    lastAccessed: Date.now(),
                 });
             }
-
-            // Get final dimensions after resize
-            const resizedMetadata = await image.metadata();
-            width = resizedMetadata.width || originalWidth;
-            height = resizedMetadata.height || originalHeight;
-            
-            // Get full resized image as raw RGBA buffer for caching
-            // Ensure we get RGBA format (4 channels)
-            const { data: fullImageData } = await image
-                .ensureAlpha()
-                .raw()
-                .toBuffer({ resolveWithObject: true });
-            
-            fullImageBuffer = fullImageData;
-            
-            // Cache the decoded+resized image
-            setCachedImage(cacheKey, {
-                buffer: fullImageBuffer,
-                width,
-                height,
-                lastAccessed: Date.now(),
-            });
+        } else {
+            // This should never happen due to validation above, but TypeScript needs it
+            return {
+                ok: false,
+                error: "Either 'imageId' or 'imageBase64' must be provided",
+            };
         }
 
         // Convert normalized coordinates to pixel coordinates
@@ -339,17 +371,172 @@ export async function sampleColorHandler(input: SampleColorInput): Promise<Sampl
 }
 
 /**
- * Sample color tool definition for MCP
+ * Image register input/output interfaces
  */
-export const sampleColorTool = {
-    name: "sample_color",
-    description: "Samples a pixel or small region from a base64-encoded image and returns RGB/hex/Lab color data plus nearest DMC thread match",
+export interface ImageRegisterInput {
+    imageBase64: string;
+    maxSize?: number; // Default 2048
+}
+
+export interface ImageRegisterOutput {
+    ok: boolean;
+    imageId?: string;
+    width?: number;
+    height?: number;
+    error?: string;
+}
+
+/**
+ * Registers an image and returns an imageId for efficient session-based sampling
+ */
+export async function imageRegisterHandler(input: ImageRegisterInput): Promise<ImageRegisterOutput> {
+    const { imageBase64, maxSize = 2048 } = input;
+
+    if (!imageBase64) {
+        return {
+            ok: false,
+            error: "imageBase64 is required",
+        };
+    }
+
+    try {
+        // Extract base64 data
+        const base64Data = extractBase64(imageBase64);
+        
+        // Generate cache key (this will be the imageId)
+        const imageId = generateCacheKey(base64Data, maxSize);
+        
+        // Check if already cached
+        let cachedImage = getCachedImage(imageId);
+        
+        if (!cachedImage) {
+            // Decode base64 to buffer
+            const imageBuffer = Buffer.from(base64Data, "base64");
+
+            // Load image with sharp and get metadata
+            let image = sharp(imageBuffer);
+            const metadata = await image.metadata();
+            
+            if (!metadata.width || !metadata.height) {
+                return {
+                    ok: false,
+                    error: "Unable to read image dimensions",
+                };
+            }
+
+            // Resize if needed (preserve aspect ratio)
+            const originalWidth = metadata.width;
+            const originalHeight = metadata.height;
+            const maxDimension = Math.max(originalWidth, originalHeight);
+            
+            if (maxDimension > maxSize) {
+                const scale = maxSize / maxDimension;
+                const newWidth = Math.round(originalWidth * scale);
+                const newHeight = Math.round(originalHeight * scale);
+                image = image.resize(newWidth, newHeight, {
+                    fit: "inside",
+                    withoutEnlargement: true,
+                });
+            }
+
+            // Get final dimensions after resize
+            const resizedMetadata = await image.metadata();
+            const width = resizedMetadata.width || originalWidth;
+            const height = resizedMetadata.height || originalHeight;
+            
+            // Get full resized image as raw RGBA buffer for caching
+            const { data: fullImageData } = await image
+                .ensureAlpha()
+                .raw()
+                .toBuffer({ resolveWithObject: true });
+            
+            // Cache the decoded+resized image
+            setCachedImage(imageId, {
+                buffer: fullImageData,
+                width,
+                height,
+                lastAccessed: Date.now(),
+            });
+            
+            return {
+                ok: true,
+                imageId,
+                width,
+                height,
+            };
+        } else {
+            // Already cached, return existing imageId and dimensions
+            return {
+                ok: true,
+                imageId,
+                width: cachedImage.width,
+                height: cachedImage.height,
+            };
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            if (
+                error.message.includes("Invalid base64") ||
+                error.message.includes("base64") ||
+                error.message.includes("unsupported image format") ||
+                error.message.includes("Input buffer")
+            ) {
+                return {
+                    ok: false,
+                    error: "Invalid base64 image data",
+                };
+            }
+            return {
+                ok: false,
+                error: `Failed to register image: ${error.message}`,
+            };
+        }
+        return {
+            ok: false,
+            error: "Unknown error during image registration",
+        };
+    }
+}
+
+/**
+ * Image register tool definition for MCP
+ */
+export const imageRegisterTool = {
+    name: "image_register",
+    description: "Registers a base64-encoded image and returns an imageId for efficient session-based color sampling. Use this for real-time thumb-drag scenarios where you'll sample multiple times from the same image.",
     inputSchema: {
         type: "object",
         properties: {
             imageBase64: {
                 type: "string",
                 description: "Base64-encoded image data (with or without data URL prefix)",
+            },
+            maxSize: {
+                type: "number",
+                description: "Maximum dimension for image resize (default: 2048)",
+                default: 2048,
+            },
+        },
+        required: ["imageBase64"],
+    },
+};
+
+/**
+ * Sample color tool definition for MCP
+ */
+export const sampleColorTool = {
+    name: "sample_color",
+    description: "Samples a pixel or small region from an image and returns RGB/hex/Lab color data plus nearest DMC thread match. Can use either imageId (from image_register) or imageBase64 (one-shot mode).",
+    inputSchema: {
+        type: "object",
+        properties: {
+            imageId: {
+                type: "string",
+                description: "Image ID from image_register (use for session-based sampling)",
+            },
+            imageBase64: {
+                type: "string",
+                description: "Base64-encoded image data (use for one-shot sampling)",
             },
             x: {
                 type: "number",
@@ -371,10 +558,10 @@ export const sampleColorTool = {
             },
             maxSize: {
                 type: "number",
-                description: "Maximum dimension for image resize (default: 2048)",
+                description: "Maximum dimension for image resize (default: 2048, only used when imageBase64 is provided)",
                 default: 2048,
             },
         },
-        required: ["imageBase64", "x", "y"],
+        required: ["x", "y"],
     },
 };

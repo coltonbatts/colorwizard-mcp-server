@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { sampleColorHandler, type SampleColorInput, debugStats, clearImageCache } from '../sample_color.js';
+import { sampleColorHandler, imageRegisterHandler, type SampleColorInput, type ImageRegisterInput, debugStats, clearImageCache } from '../sample_color.js';
 
 // Tiny 10x10 red square PNG (base64)
 const RED_SQUARE_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVR4nGP4z8CABzGMSjNgCRYAt8pjnQuW8k0AAAAASUVORK5CYII=';
@@ -324,6 +324,173 @@ describe('sample_color tool', () => {
             expect(result.match?.method).toBeDefined();
             expect(result.match?.method).toBe('lab-d65-deltae76');
             expect(result.match?.ok).toBe(true);
+        });
+    });
+
+    describe('image_register', () => {
+        it('should register image and return imageId, width, height', async () => {
+            const input: ImageRegisterInput = {
+                imageBase64: RED_SQUARE_BASE64,
+                maxSize: 2048,
+            };
+
+            const result = await imageRegisterHandler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.imageId).toBeDefined();
+            expect(typeof result.imageId).toBe('string');
+            expect(result.imageId?.length).toBeGreaterThan(0);
+            expect(result.width).toBeDefined();
+            expect(result.height).toBeDefined();
+            expect(typeof result.width).toBe('number');
+            expect(typeof result.height).toBe('number');
+            expect(result.width).toBeGreaterThan(0);
+            expect(result.height).toBeGreaterThan(0);
+        });
+
+        it('should return same imageId for same image and maxSize', async () => {
+            const input: ImageRegisterInput = {
+                imageBase64: RED_SQUARE_BASE64,
+                maxSize: 2048,
+            };
+
+            const result1 = await imageRegisterHandler(input);
+            const result2 = await imageRegisterHandler(input);
+
+            expect(result1.ok).toBe(true);
+            expect(result2.ok).toBe(true);
+            expect(result1.imageId).toBe(result2.imageId);
+            expect(result1.width).toBe(result2.width);
+            expect(result1.height).toBe(result2.height);
+        });
+
+        it('should return ok:false for invalid base64', async () => {
+            const input: ImageRegisterInput = {
+                imageBase64: 'INVALID_BASE64_DATA!!!',
+            };
+
+            const result = await imageRegisterHandler(input);
+
+            expect(result.ok).toBe(false);
+            expect(result.error).toBeDefined();
+            expect(result.error).toContain('Invalid base64');
+        });
+
+        it('should handle data URL format', async () => {
+            const dataUrl = `data:image/png;base64,${RED_SQUARE_BASE64}`;
+            const input: ImageRegisterInput = {
+                imageBase64: dataUrl,
+            };
+
+            const result = await imageRegisterHandler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.imageId).toBeDefined();
+        });
+    });
+
+    describe('sample_color with imageId', () => {
+        it('should sample color using imageId from registered image', async () => {
+            // First register the image
+            const registerInput: ImageRegisterInput = {
+                imageBase64: RED_SQUARE_BASE64,
+                maxSize: 2048,
+            };
+            const registerResult = await imageRegisterHandler(registerInput);
+            expect(registerResult.ok).toBe(true);
+            expect(registerResult.imageId).toBeDefined();
+
+            // Reset cache stats after registration
+            debugStats.cacheHits = 0;
+            debugStats.cacheMisses = 0;
+
+            // Now sample using imageId
+            const sampleInput: SampleColorInput = {
+                imageId: registerResult.imageId!,
+                x: 0.5,
+                y: 0.5,
+            };
+
+            const result = await sampleColorHandler(sampleInput);
+
+            expect(result.ok).toBe(true);
+            expect(result.rgb).toBeDefined();
+            expect(result.rgb?.r).toBeGreaterThan(200); // Should be red
+            expect(result.hex).toBeDefined();
+            expect(result.lab).toBeDefined();
+            expect(result.match).toBeDefined();
+
+            // Should be a cache hit since image was already registered
+            if (debugStats) {
+                expect(debugStats.cacheHits).toBe(1);
+                expect(debugStats.cacheMisses).toBe(0);
+            }
+        });
+
+        it('should return ok:false for missing imageId', async () => {
+            const input: SampleColorInput = {
+                imageId: 'nonexistent-image-id-12345',
+                x: 0.5,
+                y: 0.5,
+            };
+
+            const result = await sampleColorHandler(input);
+
+            expect(result.ok).toBe(false);
+            expect(result.error).toBeDefined();
+            expect(result.error).toContain('not found in cache');
+            expect(result.error).toContain('Register the image first');
+        });
+
+        it('should work with imageId and increment cache hits on subsequent calls', async () => {
+            // Register image
+            const registerInput: ImageRegisterInput = {
+                imageBase64: RED_SQUARE_BASE64,
+            };
+            const registerResult = await imageRegisterHandler(registerInput);
+            expect(registerResult.ok).toBe(true);
+            const imageId = registerResult.imageId!;
+
+            // Reset stats
+            debugStats.cacheHits = 0;
+            debugStats.cacheMisses = 0;
+
+            // First sample
+            const sample1 = await sampleColorHandler({
+                imageId,
+                x: 0.5,
+                y: 0.5,
+            });
+            expect(sample1.ok).toBe(true);
+
+            // Second sample at different location
+            const sample2 = await sampleColorHandler({
+                imageId,
+                x: 0.3,
+                y: 0.7,
+            });
+            expect(sample2.ok).toBe(true);
+
+            // Both should be cache hits
+            if (debugStats) {
+                expect(debugStats.cacheHits).toBe(2);
+                expect(debugStats.cacheMisses).toBe(0);
+            }
+        });
+
+        it('should return ok:false when neither imageId nor imageBase64 provided', async () => {
+            const input: SampleColorInput = {
+                x: 0.5,
+                y: 0.5,
+            } as SampleColorInput;
+
+            const result = await sampleColorHandler(input);
+
+            expect(result.ok).toBe(false);
+            expect(result.error).toBeDefined();
+            expect(result.error).toContain('Either');
+            expect(result.error).toContain('imageId');
+            expect(result.error).toContain('imageBase64');
         });
     });
 });

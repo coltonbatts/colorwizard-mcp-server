@@ -4,7 +4,7 @@
 
 import { pingTool, pingHandler, type PingInput } from "./ping.js";
 import { matchDmcTool, matchDmcHandler, type MatchDmcInput } from "./match_dmc.js";
-import { sampleColorTool, sampleColorHandler, type SampleColorInput } from "./sample_color.js";
+import { sampleColorTool, sampleColorHandler, type SampleColorInput, imageRegisterTool, imageRegisterHandler, type ImageRegisterInput } from "./sample_color.js";
 import { healthTool, healthHandler } from "./health.js";
 import { analyzeImageRegion } from "./vision.js";
 import { vibeShifter, type ColorArray } from "./vibe.js";
@@ -31,6 +31,7 @@ export const tools: ToolDefinition[] = [
     pingTool,
     healthTool,
     matchDmcTool,
+    imageRegisterTool,
     sampleColorTool,
     {
         name: "analyze_image_region",
@@ -178,9 +179,12 @@ export const toolHandlers: Record<string, ToolHandler> = {
     ping: (args: unknown) => pingHandler(args as PingInput),
     health: (_args: unknown) => healthHandler(),
     match_dmc: (args: unknown) => matchDmcHandler(args as MatchDmcInput),
+    image_register: async (args: unknown) => {
+        return await imageRegisterHandler(args as ImageRegisterInput);
+    },
     sample_color: async (args: unknown) => {
-        const { imageBase64, x, y, radius, maxSize } = args as SampleColorInput;
-        return await sampleColorHandler({ imageBase64, x, y, radius, maxSize });
+        const { imageId, imageBase64, x, y, radius, maxSize } = args as SampleColorInput;
+        return await sampleColorHandler({ imageId, imageBase64, x, y, radius, maxSize });
     },
     analyze_image_region: async (args: unknown) => {
         const { image_path, x, y, radius } = args as {

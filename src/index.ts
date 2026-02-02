@@ -125,14 +125,43 @@ export class ColorWizardServer {
                 };
             }
 
+            // Image register tool handler
+            if (toolName === "image_register") {
+                const schema = z.object({
+                    imageBase64: z.string(),
+                    maxSize: z.number().positive().optional(),
+                });
+
+                const parseResult = schema.safeParse(request.params.arguments);
+                if (!parseResult.success) {
+                    throw new McpError(
+                        ErrorCode.InvalidParams,
+                        parseResult.error.issues[0]?.message || "Invalid parameters for image_register"
+                    );
+                }
+
+                const result = await toolHandlers.image_register(parseResult.data);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(result, null, 2),
+                        },
+                    ],
+                };
+            }
+
             // Sample color tool handler
             if (toolName === "sample_color") {
                 const schema = z.object({
-                    imageBase64: z.string(),
+                    imageId: z.string().optional(),
+                    imageBase64: z.string().optional(),
                     x: z.number().min(0).max(1),
                     y: z.number().min(0).max(1),
                     radius: z.number().min(0).optional(),
                     maxSize: z.number().positive().optional(),
+                }).refine((data) => data.imageId || data.imageBase64, {
+                    message: "Either 'imageId' or 'imageBase64' must be provided",
                 });
 
                 const parseResult = schema.safeParse(request.params.arguments);
