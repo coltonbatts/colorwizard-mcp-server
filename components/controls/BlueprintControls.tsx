@@ -11,61 +11,19 @@ export function BlueprintControls() {
   const params = useBlueprintStore((state) => state.params);
   const updateParams = useBlueprintStore((state) => state.updateParams);
   const loading = useBlueprintStore((state) => state.loading);
-  const lastResponse = useBlueprintStore((state) => state.lastResponse);
   const highQualityPreview = useBlueprintStore((state) => state.highQualityPreview);
   const setHighQualityPreview = useBlueprintStore((state) => state.setHighQualityPreview);
   const mockMode = useBlueprintStore((state) => state.mockMode);
   const setMockMode = useBlueprintStore((state) => state.setMockMode);
-  const [showAdvanced, setShowAdvanced] = React.useState(false);
-
-  // Count threads with DMC matches
-  const threadsNeeded = lastResponse?.palette?.filter(c => c.dmcMatch?.ok && c.dmcMatch.best).length || 0;
 
   return (
     <div className="p-4 bg-gray-900 rounded-lg border border-gray-800">
-      {/* Primary slider: Colors Used */}
-      <div className="space-y-2 mb-4">
-        <label className="block text-sm font-medium text-white">
-          Colors Used
-        </label>
-        <div className="flex items-center gap-4">
-          <input
-            type="range"
-            min="2"
-            max="40"
-            value={params.paletteSize}
-            onChange={(e) => {
-              const value = parseInt(e.target.value, 10);
-              // Clamp to valid range (store will also clamp, but do it here for immediate feedback)
-              const clampedValue = Math.max(2, Math.min(40, value));
-              if (!isNaN(clampedValue)) {
-                updateParams({ paletteSize: clampedValue });
-              }
-            }}
-            className="flex-1 h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
-          />
-          <span className="text-white font-bold text-lg min-w-[3rem] text-right">
-            {params.paletteSize}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-400">
-            More colors = higher fidelity, more thread changes
-          </p>
-          {threadsNeeded > 0 && (
-            <p className="text-xs text-gray-300 font-semibold">
-              Threads Needed: <span className="text-white">{threadsNeeded}</span>
-            </p>
-          )}
-        </div>
-      </div>
-
       {/* Advanced options (collapsed by default) */}
-      <details className="mt-4">
-        <summary className="cursor-pointer text-sm text-gray-400 hover:text-gray-300 mb-2">
-          Advanced Options
+      <details className="mt-0" open={false}>
+        <summary className="cursor-pointer text-sm font-semibold text-gray-400 hover:text-gray-300 mb-2 uppercase tracking-wide">
+          Advanced
         </summary>
-        <div className="space-y-4 pt-2">
+        <div className="space-y-4 pt-3">
           {/* Min Region Area */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-400">

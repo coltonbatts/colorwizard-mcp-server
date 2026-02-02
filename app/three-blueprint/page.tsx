@@ -37,6 +37,7 @@ export default function ThreeBlueprintPage() {
   const error = useBlueprintStore((state) => state.error);
   const loading = useBlueprintStore((state) => state.loading);
   const statusMessage = useBlueprintStore((state) => state.statusMessage);
+  const mode = useBlueprintStore((state) => state.mode);
 
   // Sync mock mode to API layer
   // CRITICAL: This ensures UI state and API layer are always synchronized
@@ -583,32 +584,40 @@ export default function ThreeBlueprintPage() {
     <div className="min-h-screen bg-black text-white">
       <div className="container mx-auto p-4 max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
           <div>
             <h1 className="text-2xl font-bold uppercase tracking-wide">
               Blueprint
             </h1>
-            <div className="flex items-center gap-4 mt-1">
-              <span className="text-sm text-gray-400">
-                Colors: <span className="text-white font-semibold">{palette.length || 0}</span>
+            <div className="flex items-center gap-4 mt-2">
+              <span className="text-base text-gray-300">
+                Colors Used: <span className="text-white font-bold text-lg">{palette.length || params.paletteSize}</span>
               </span>
               {hasDmcData && (
-                <span className="text-sm text-gray-400">
-                  Threads: <span className="text-white font-semibold">{totalThreads}</span>
+                <span className="text-base text-gray-300">
+                  Threads Needed: <span className="text-white font-bold text-lg">{totalThreads}</span>
                 </span>
               )}
             </div>
+            {/* DEMO_ORIGIN diagnostics - subtle, secondary */}
+            {!mockMode && (
+              <div className="mt-1">
+                <span className="text-xs text-gray-600">
+                  API: {getDemoOrigin()}
+                </span>
+              </div>
+            )}
           </div>
           {/* Mode badge */}
           <div className="flex items-center gap-2">
             <span
-              className={`px-2 py-1 rounded text-xs font-semibold uppercase ${
+              className={`px-3 py-1.5 rounded text-xs font-semibold uppercase ${
                 mockMode
                   ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
                   : 'bg-green-500/20 text-green-400 border border-green-500/50'
               }`}
             >
-              {mockMode ? 'Mock' : 'Live API'}
+              {mockMode ? 'Mock' : 'Live'}
             </span>
           </div>
         </div>
@@ -643,47 +652,153 @@ export default function ThreeBlueprintPage() {
           />
         </div>
 
-        {/* Main layout - output dominant */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
-          {/* Left: Reference image (collapsible, smaller) */}
-          {imageId && (
-            <div className="lg:col-span-3">
-              <ReferenceImagePanel originalPreviewUrl={originalPreviewUrl} highlightThreshold={highlightThreshold} />
-            </div>
-          )}
+        {/* Primary Control: Colors Used slider */}
+        {imageId && (
+          <div className="mb-6">
+            <ColorsUsedControl />
+          </div>
+        )}
 
-          {/* Center: Output preview (dominant) */}
-          <div className={`${imageId ? 'lg:col-span-9' : 'lg:col-span-12'} h-[600px] lg:h-[800px]`}>
-            <div className="h-full flex flex-col">
-              <h3 className="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wide">
-                Blueprint Output
-              </h3>
-              <div className="flex-1 bg-black rounded border border-gray-800 relative">
-                <BlueprintCanvas
-                  previewBase64={previewBase64}
-                  originalImageUrl={null}
-                  highlightColor={highlightColor}
-                  highlightThreshold={highlightThreshold}
-                />
-                {loading && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <div className="text-white text-sm">{statusMessage || 'Processing...'}</div>
-                  </div>
-                )}
-              </div>
+        {/* Main layout - Desktop: Output + Thread List side by side, Mobile: stacked */}
+        {imageId ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
+            {/* Desktop: Blueprint Output (75%) + Thread List (25%) */}
+            {/* Mobile: Blueprint Output full width, then Thread List full width */}
+            <div className="lg:col-span-9 order-1">
+              <BlueprintOutputPanel 
+                previewBase64={previewBase64}
+                highlightColor={highlightColor}
+                highlightThreshold={highlightThreshold}
+                loading={loading}
+                statusMessage={statusMessage}
+                mode={mode}
+              />
+            </div>
+            <div className="lg:col-span-3 order-2">
+              <PalettePanel />
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-4">
+            <BlueprintOutputPanel 
+              previewBase64={previewBase64}
+              highlightColor={highlightColor}
+              highlightThreshold={highlightThreshold}
+              loading={loading}
+              statusMessage={statusMessage}
+              mode={mode}
+            />
+          </div>
+        )}
 
-        {/* Controls - always visible so mock mode can be toggled before upload */}
+        {/* Reference Image - Collapsible, secondary */}
+        {imageId && (
+          <div className="mb-4">
+            <ReferenceImagePanel originalPreviewUrl={originalPreviewUrl} highlightThreshold={highlightThreshold} />
+          </div>
+        )}
+
+        {/* Controls - Advanced options in accordion */}
         <div className="mb-4">
           <BlueprintControls />
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* Thread list - prominent, full width */}
-        {imageId && (
-          <div className="mb-4">
-            <PalettePanel />
+interface ColorsUsedControlProps {}
+
+function ColorsUsedControl({}: ColorsUsedControlProps) {
+  const params = useBlueprintStore((state) => state.params);
+  const updateParams = useBlueprintStore((state) => state.updateParams);
+  const lastResponse = useBlueprintStore((state) => state.lastResponse);
+  const threadsNeeded = lastResponse?.palette?.filter(c => c.dmcMatch?.ok && c.dmcMatch.best).length || 0;
+
+  return (
+    <div className="p-4 bg-gray-900 rounded-lg border border-gray-800">
+      <label className="block text-base font-semibold text-white mb-3">
+        Colors Used
+      </label>
+      <div className="flex items-center gap-4 mb-2">
+        <input
+          type="range"
+          min="2"
+          max="40"
+          value={params.paletteSize}
+          onChange={(e) => {
+            const value = parseInt(e.target.value, 10);
+            const clampedValue = Math.max(2, Math.min(40, value));
+            if (!isNaN(clampedValue)) {
+              updateParams({ paletteSize: clampedValue });
+            }
+          }}
+          className="flex-1 h-4 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+        />
+        <span className="text-white font-bold text-xl min-w-[3rem] text-right">
+          {params.paletteSize}
+        </span>
+      </div>
+      <div className="flex items-center justify-between mt-2">
+        <p className="text-sm text-gray-400">
+          More colors = more detail, more thread changes
+        </p>
+        {threadsNeeded > 0 && (
+          <p className="text-sm text-gray-300 font-semibold">
+            Threads Needed: <span className="text-white">{threadsNeeded}</span>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface BlueprintOutputPanelProps {
+  previewBase64: string | null;
+  highlightColor: [number, number, number] | null;
+  highlightThreshold: number;
+  loading: boolean;
+  statusMessage: string | null;
+  mode: 'fast' | 'final';
+}
+
+function BlueprintOutputPanel({ 
+  previewBase64, 
+  highlightColor, 
+  highlightThreshold, 
+  loading, 
+  statusMessage,
+  mode 
+}: BlueprintOutputPanelProps) {
+  // Determine status text
+  const getStatusText = () => {
+    if (loading) {
+      if (statusMessage) return statusMessage;
+      return mode === 'fast' ? 'Fast Preview' : 'Final Preview';
+    }
+    return 'Ready';
+  };
+
+  return (
+    <div className="h-[600px] lg:h-[900px] flex flex-col">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+          BLUEPRINT OUTPUT
+        </h3>
+        <span className="text-xs text-gray-500">
+          {getStatusText()}
+        </span>
+      </div>
+      <div className="flex-1 bg-black rounded border border-gray-800 relative">
+        <BlueprintCanvas
+          previewBase64={previewBase64}
+          originalImageUrl={null}
+          highlightColor={highlightColor}
+          highlightThreshold={highlightThreshold}
+        />
+        {loading && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <div className="text-white text-sm">{statusMessage || 'Processing...'}</div>
           </div>
         )}
       </div>
@@ -697,7 +812,7 @@ interface ReferenceImagePanelProps {
 }
 
 function ReferenceImagePanel({ originalPreviewUrl, highlightThreshold }: ReferenceImagePanelProps) {
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const [isCollapsed, setIsCollapsed] = React.useState(true); // Default collapsed
 
   if (!originalPreviewUrl) return null;
 
@@ -708,13 +823,13 @@ function ReferenceImagePanel({ originalPreviewUrl, highlightThreshold }: Referen
         className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-800/50 transition-colors"
       >
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
-          Reference Image
+          Reference
         </h3>
         <span className="text-gray-500">{isCollapsed ? '▶' : '▼'}</span>
       </button>
       {!isCollapsed && (
         <div className="h-[400px] p-2">
-          <div className="h-full bg-black rounded border border-gray-800">
+          <div className="h-full bg-black rounded border border-gray-800 relative" style={{ objectFit: 'contain' }}>
             <BlueprintCanvas
               previewBase64={null}
               originalImageUrl={originalPreviewUrl}

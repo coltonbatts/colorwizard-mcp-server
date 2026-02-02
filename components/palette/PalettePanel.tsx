@@ -17,8 +17,8 @@ export function PalettePanel() {
   if (palette.length === 0) {
     return (
       <div className="p-4 bg-gray-900 rounded-lg border border-gray-800">
-        <h2 className="text-lg font-semibold text-white uppercase tracking-wide mb-4">
-          Thread List
+        <h2 className="text-base font-semibold text-white uppercase tracking-wide mb-4">
+          THREADS REQUIRED
         </h2>
         <p className="text-gray-500 text-sm">Upload an image to generate a thread list</p>
       </div>
@@ -45,19 +45,19 @@ export function PalettePanel() {
   };
 
   return (
-    <div className="p-4 bg-gray-900 rounded-lg border border-gray-800">
+    <div className="p-4 bg-gray-900 rounded-lg border border-gray-800 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-white uppercase tracking-wide">
-          Thread List ({palette.length} colors)
+        <h2 className="text-base font-semibold text-white uppercase tracking-wide">
+          THREADS REQUIRED
         </h2>
         <button
           onClick={copyThreadList}
-          className="px-3 py-1 text-sm bg-gray-800 hover:bg-gray-700 text-white rounded border border-gray-700 transition-colors"
+          className="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-white rounded border border-gray-700 transition-colors"
         >
           Copy Thread List
         </button>
       </div>
-      <div className="space-y-2 max-h-[600px] overflow-y-auto">
+      <div className="space-y-3 flex-1 overflow-y-auto">
         {sortedPalette.map((color, index) => (
           <PaletteItem
             key={index}
@@ -97,57 +97,57 @@ function PaletteItem({ color, index, isHighlighted, onToggleHighlight }: Palette
   return (
     <button
       onClick={onToggleHighlight}
-      className={`w-full flex items-center gap-4 p-4 rounded-lg border transition-all ${
+      className={`w-full flex items-center gap-4 p-3 rounded-lg border transition-all ${
         isHighlighted
           ? 'bg-orange-500/20 border-orange-500 ring-2 ring-orange-500'
           : 'bg-gray-800 border-gray-700 hover:border-gray-600'
       }`}
     >
-      {/* Color swatch - larger */}
+      {/* Color swatch - larger (32x32px) */}
       <div
-        className="w-16 h-16 rounded border-2 border-gray-600 flex-shrink-0"
+        className="w-8 h-8 rounded border-2 border-gray-600 flex-shrink-0"
         style={{ backgroundColor: color.hex }}
       />
 
-      {/* Color info - more prominent */}
+      {/* Color info - improved typography */}
       <div className="flex-1 min-w-0 text-left">
         {hasDmcMatch ? (
           <>
-            <div className="font-bold text-white text-base">
+            <div className="font-bold text-white text-sm">
               {color.dmcMatch.best.id}
             </div>
-            <div className="text-sm text-gray-300 mt-1">
+            <div className="text-xs text-gray-400 mt-0.5">
               {color.dmcMatch.best.name}
             </div>
             {color.dmcMatch.best.deltaE !== undefined && (
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-gray-500 mt-0.5">
                 ΔE: {color.dmcMatch.best.deltaE.toFixed(2)}
               </div>
             )}
           </>
         ) : isLoadingDmc ? (
           <>
-            <div className="font-semibold text-gray-400 text-base">
+            <div className="font-semibold text-gray-400 text-sm">
               Color {index + 1}
             </div>
-            <div className="text-sm text-gray-500 mt-1">
+            <div className="text-xs text-gray-500 mt-0.5">
               Loading thread match...
             </div>
           </>
         ) : (
           <>
-            <div className="font-semibold text-gray-400 text-base">
+            <div className="font-semibold text-gray-400 text-sm">
               Color {index + 1}
             </div>
-            <div className="text-sm text-gray-500 mt-1">
+            <div className="text-xs text-gray-500 mt-0.5">
               {color.hex}
             </div>
           </>
         )}
       </div>
 
-      {/* Percentage - larger */}
-      <div className="text-white font-bold text-lg min-w-[5rem] text-right">
+      {/* Percentage - aligned right */}
+      <div className="text-white font-semibold text-sm min-w-[4rem] text-right">
         {color.percent.toFixed(1)}%
       </div>
     </button>
