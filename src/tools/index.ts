@@ -11,6 +11,7 @@ import { vibeShifter, type ColorArray } from "./vibe.js";
 import { generateStitchPattern } from "./pattern.js";
 import { generateBlueprint } from "../lib/blueprint/generateBlueprint.js";
 import { generateBlueprintV1Tool, generateBlueprintV1Handler, type GenerateBlueprintV1Input } from "./generate_blueprint_v1.js";
+import { generateBlueprintV2Tool, generateBlueprintV2Handler, type GenerateBlueprintV2Input } from "./generate_blueprint_v2.js";
 
 /**
  * Tool definition type
@@ -167,6 +168,7 @@ export const tools: ToolDefinition[] = [
         },
     },
     generateBlueprintV1Tool,
+    generateBlueprintV2Tool,
 ];
 
 /**
@@ -238,5 +240,8 @@ export const toolHandlers: Record<string, ToolHandler> = {
     },
     generate_blueprint_v1: async (args: unknown) => {
         return await generateBlueprintV1Handler(args as GenerateBlueprintV1Input);
+    },
+    generate_blueprint_v2: async (args: unknown) => {
+        return await generateBlueprintV2Handler(args as GenerateBlueprintV2Input);
     },
 };

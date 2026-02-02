@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColorWizard | Blueprint v1 Demo</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #0a0a0a;
+            --paper: #111111;
+            --accent: #ff3e00;
+            --text: #e0e0e0;
+            --muted: #888888;
+            --border: #333333;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .upload-section {
+            background: var(--paper);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 2rem;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border);
+            padding: 3rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent);
+            background: #161616;
+        }
+
+        .upload-area.dragover {
+            border-color: var(--accent);
+            background: #1a1a1a;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .value-display {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.85rem;
+            transition: filter 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover:not(:disabled) {
+            filter: brightness(1.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .results {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .preview-section,
+        .palette-section {
+            background: var(--paper);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }
+
+        #preview-img {
+            max-width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .palette-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .palette-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: #161616;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .color-swatch {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .color-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .color-hex {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .color-dmc {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .color-percent {
+            font-weight: 600;
+            font-size: 0.9rem;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            color: var(--muted);
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .error {
+            display: none;
+            padding: 1rem;
+            background: #2a1a1a;
+            border: 1px solid #ff3e00;
+            border-radius: 6px;
+            color: #ff6b6b;
+            margin-top: 1rem;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        .status-text {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ColorWizard Blueprint v1</h1>
+        <p class="subtitle">Quantize images into perceptual color palettes with DMC thread matches</p>
+
+        <div class="upload-section">
+            <div class="upload-area" id="upload-area">
+                <div id="upload-label">Click to upload or drag image here</div>
+                <img id="upload-preview" style="display: none; max-width: 100%; max-height: 300px; margin-top: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                <input type="file" id="file-input" accept="image/*">
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label for="palette-size">Palette Size</label>
+                    <div class="slider-container">
+                        <input type="range" id="palette-size" min="2" max="30" value="15">
+                        <span class="value-display" id="palette-size-value">15</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="min-region-area">Min Region Area</label>
+                    <div class="slider-container">
+                        <input type="range" id="min-region-area" min="0" max="500" value="100" step="10">
+                        <span class="value-display" id="min-region-area-value">100</span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn" id="generate-btn" disabled style="display: none;">Generate Blueprint</button>
+
+            <div class="status-text" id="status-text" style="display: none; text-align: center; padding: 0.5rem; color: var(--muted); font-size: 0.85rem;"></div>
+            <div class="loading" id="loading">Generating blueprint...</div>
+            <div class="error" id="error"></div>
+        </div>
+
+        <div class="results" id="results" style="display: none;">
+            <div class="preview-section">
+                <div class="section-title">Preview</div>
+                <img id="preview-img" alt="Blueprint preview">
+            </div>
+
+            <div class="palette-section">
+                <div class="section-title">Palette</div>
+                <div class="palette-list" id="palette-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+
+        // State
+        let currentImageBase64 = null;
+        let currentImageId = null;
+        let currentImageUrl = null; // For cleanup
+        let debounceTimer = null;
+        let finalPreviewTimer = null;
+        let abortController = null;
+        let requestId = 0;
+        let lastValidPreview = null;
+        let lastValidPalette = null;
+
+        // DOM elements
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadLabel = document.getElementById('upload-label');
+        const uploadPreview = document.getElementById('upload-preview');
+        const paletteSizeSlider = document.getElementById('palette-size');
+        const paletteSizeValue = document.getElementById('palette-size-value');
+        const minRegionAreaSlider = document.getElementById('min-region-area');
+        const minRegionAreaValue = document.getElementById('min-region-area-value');
+        const statusText = document.getElementById('status-text');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const results = document.getElementById('results');
+        const previewImg = document.getElementById('preview-img');
+        const paletteList = document.getElementById('palette-list');
+
+        // File upload handling
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleFile(file);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+
+        async function handleFile(file) {
+            // Clean up previous image URL
+            if (currentImageUrl) {
+                URL.revokeObjectURL(currentImageUrl);
+                currentImageUrl = null;
+            }
+
+            // Reset state
+            currentImageBase64 = null;
+            currentImageId = null;
+            lastValidPreview = null;
+            lastValidPalette = null;
+            results.style.display = 'none';
+            error.classList.remove('active');
+            statusText.style.display = 'none';
+
+            // Cancel any pending requests
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+                debounceTimer = null;
+            }
+            if (finalPreviewTimer) {
+                clearTimeout(finalPreviewTimer);
+                finalPreviewTimer = null;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                currentImageBase64 = e.target.result;
+                
+                // Show image preview
+                currentImageUrl = URL.createObjectURL(file);
+                uploadPreview.src = currentImageUrl;
+                uploadPreview.style.display = 'block';
+                uploadLabel.textContent = file.name;
+
+                // Register image
+                try {
+                    const response = await fetch(`${API_URL}/api/image-register`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            imageBase64: currentImageBase64,
+                            maxSize: 2048,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    if (result.ok && result.imageId) {
+                        currentImageId = result.imageId;
+                        // Trigger initial preview
+                        triggerPreview(true);
+                    } else {
+                        throw new Error(result.error || 'Failed to register image');
+                    }
+                } catch (err) {
+                    error.textContent = err.message || 'Failed to register image';
+                    error.classList.add('active');
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Slider updates
+        paletteSizeSlider.addEventListener('input', (e) => {
+            paletteSizeValue.textContent = e.target.value;
+            if (currentImageId) {
+                triggerPreview(false);
+            }
+        });
+
+        minRegionAreaSlider.addEventListener('input', (e) => {
+            minRegionAreaValue.textContent = e.target.value;
+            if (currentImageId) {
+                triggerPreview(false);
+            }
+        });
+
+        function triggerPreview(isInitial = false) {
+            if (!currentImageId) return;
+
+            // Clear existing timers
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+            if (finalPreviewTimer) {
+                clearTimeout(finalPreviewTimer);
+            }
+
+            // Abort previous request
+            if (abortController) {
+                abortController.abort();
+            }
+
+            // Debounce: wait 300ms before generating
+            debounceTimer = setTimeout(() => {
+                generatePreview(512, 'Fast preview', isInitial);
+                
+                // After user stops for 700ms, generate final preview
+                finalPreviewTimer = setTimeout(() => {
+                    generatePreview(2048, 'Final preview', false);
+                }, 700);
+            }, 300);
+        }
+
+        async function generatePreview(maxSize, statusMessage, isInitial) {
+            if (!currentImageId) return;
+
+            // Abort previous request
+            if (abortController) {
+                abortController.abort();
+            }
+
+            // Create new abort controller and request ID
+            abortController = new AbortController();
+            const currentRequestId = ++requestId;
+
+            // Update status
+            statusText.textContent = statusMessage;
+            statusText.style.display = 'block';
+            error.classList.remove('active');
+
+            try {
+                const response = await fetch(`${API_URL}/api/generate-blueprint-v1`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        imageId: currentImageId,
+                        paletteSize: parseInt(paletteSizeSlider.value),
+                        minRegionArea: parseInt(minRegionAreaSlider.value),
+                        maxSize: maxSize,
+                        seed: 42,
+                        returnPreview: true,
+                    }),
+                    signal: abortController.signal,
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                // Check if this response is stale
+                if (currentRequestId !== requestId) {
+                    return; // Ignore stale response
+                }
+
+                if (!result.ok) {
+                    throw new Error(result.error || 'Failed to generate blueprint');
+                }
+
+                // Debug: log response structure
+                console.log('Blueprint response:', {
+                    ok: result.ok,
+                    hasPreview: !!result.indexedPreviewPngBase64,
+                    previewLength: result.indexedPreviewPngBase64?.length,
+                    hasPalette: !!result.palette,
+                    paletteLength: result.palette?.length,
+                });
+
+                // Show preview immediately
+                if (result.indexedPreviewPngBase64) {
+                    const dataUrl = `data:image/png;base64,${result.indexedPreviewPngBase64}`;
+                    // Set up image load handlers before setting src
+                    previewImg.onerror = () => {
+                        console.error('Failed to load preview image');
+                        error.textContent = 'Failed to load preview image (invalid base64 data)';
+                        error.classList.add('active');
+                    };
+                    
+                    previewImg.onload = () => {
+                        console.log('Preview image loaded successfully');
+                        error.classList.remove('active');
+                    };
+                    
+                    // Set the image source - this triggers loading
+                    previewImg.src = dataUrl;
+                    previewImg.style.display = 'block';
+                    lastValidPreview = result.indexedPreviewPngBase64;
+                    console.log('Preview image src set, length:', result.indexedPreviewPngBase64.length);
+                    
+                    // Show results section immediately
+                    results.style.display = 'grid';
+                } else {
+                    console.warn('No indexedPreviewPngBase64 in response');
+                    // Show error if preview was expected
+                    error.textContent = 'Preview image not returned from server';
+                    error.classList.add('active');
+                }
+
+                // Show palette
+                if (result.palette && result.palette.length > 0) {
+                    paletteList.innerHTML = '';
+                    
+                    // Add colors used count
+                    const colorsHeader = document.createElement('div');
+                    colorsHeader.style.cssText = 'font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem;';
+                    colorsHeader.textContent = `Colors used: ${result.palette.length}`;
+                    paletteList.appendChild(colorsHeader);
+                    
+                    result.palette.forEach((color) => {
+                        const item = document.createElement('div');
+                        item.className = 'palette-item';
+                        
+                        const swatch = document.createElement('div');
+                        swatch.className = 'color-swatch';
+                        swatch.style.backgroundColor = color.hex;
+                        
+                        const info = document.createElement('div');
+                        info.className = 'color-info';
+                        
+                        const hex = document.createElement('div');
+                        hex.className = 'color-hex';
+                        hex.textContent = color.hex;
+                        
+                        const dmc = document.createElement('div');
+                        dmc.className = 'color-dmc';
+                        if (color.dmcMatch && color.dmcMatch.ok && color.dmcMatch.best) {
+                            dmc.textContent = `${color.dmcMatch.best.id} - ${color.dmcMatch.best.name}`;
+                        } else {
+                            dmc.textContent = 'No DMC match';
+                        }
+                        
+                        info.appendChild(hex);
+                        info.appendChild(dmc);
+                        
+                        const percent = document.createElement('div');
+                        percent.className = 'color-percent';
+                        percent.textContent = `${color.percent.toFixed(1)}%`;
+                        
+                        item.appendChild(swatch);
+                        item.appendChild(info);
+                        item.appendChild(percent);
+                        
+                        paletteList.appendChild(item);
+                    });
+                    
+                    lastValidPalette = result.palette;
+                }
+
+                // Show results section if we have palette (preview already handled above)
+                const hasPalette = result.palette && result.palette.length > 0;
+                if (hasPalette) {
+                    results.style.display = 'grid';
+                }
+                
+                // Always hide status text after processing response
+                statusText.style.display = 'none';
+                console.log('Status text hidden, results displayed:', results.style.display);
+            } catch (err) {
+                // Ignore abort errors
+                if (err.name === 'AbortError') {
+                    return;
+                }
+
+                // Check if this error is stale
+                if (currentRequestId !== requestId) {
+                    return;
+                }
+
+                error.textContent = err.message || 'An error occurred';
+                error.classList.add('active');
+                statusText.style.display = 'none';
+
+                // Keep last valid preview on error
+                if (lastValidPreview) {
+                    previewImg.src = `data:image/png;base64,${lastValidPreview}`;
+                    previewImg.style.display = 'block';
+                    results.style.display = 'grid';
+                }
+            } finally {
+                // Only clear loading if this is the most recent request
+                if (currentRequestId === requestId) {
+                    loading.classList.remove('active');
+                }
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (currentImageUrl) {
+                URL.revokeObjectURL(currentImageUrl);
+            }
+            if (abortController) {
+                abortController.abort();
+            }
+        });
+    </script>
+</body>
+</html>

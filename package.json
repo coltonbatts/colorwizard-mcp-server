@@ -12,7 +12,10 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:pipeline": "tsc test-pipeline.ts --outDir dist --esModuleInterop --moduleResolution node --module esnext --target es2020 && node dist/test-pipeline.js"
+    "test:pipeline": "tsc test-pipeline.ts --outDir dist --esModuleInterop --moduleResolution node --module esnext --target es2020 && node dist/test-pipeline.js",
+    "demo": "tsx demo/server.ts",
+    "demo:build": "tsc demo/server.ts --outDir dist/demo --esModuleInterop --moduleResolution node --module esnext --target es2020",
+    "demo:start": "node dist/demo/server.js"
   },
   "keywords": [],
   "author": "",

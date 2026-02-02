@@ -407,6 +407,10 @@ Transforms an input image into a vector paint-by-number SVG blueprint.
 
 Quantizes an image into N perceptual colors using Lab color space, returns a palette with per-color pixel counts and DMC thread matches. Phase 1: no SVG tracing, no region adjacency, no contours.
 
+### `generate_blueprint_v2`
+
+Quantizes an image into N perceptual colors using Lab color space, extracts region contours (polylines), returns palette + per-region contours. Phase 2: contour extraction (no SVG).
+
 **Input Formats:**
 
 **Session mode** (recommended for multiple operations):
@@ -510,6 +514,136 @@ On error (`ok: false`):
   - Medium images (`maxSize` 512-1024): 50-100 pixels
   - Large images (`maxSize` > 1024): 100-200 pixels
 - Phase 1.5 implementation: includes region cleanup, but no SVG tracing, no region adjacency graphs, no contours
+
+**Input Formats:**
+
+**Session mode** (recommended for multiple operations):
+```json
+{
+  "imageId": "a1b2c3d4e5f6...",
+  "paletteSize": 12
+}
+```
+
+**One-shot mode**:
+```json
+{
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVR4nGP4z8CABzGMSjNgCRYAt8pjnQuW8k0AAAAASUVORK5CYII=",
+  "paletteSize": 12,
+  "maxSize": 2048
+}
+```
+
+**Parameters:**
+- `imageId` (optional): Image ID from `image_register` - use for session-based processing
+- `imageBase64` (optional): Base64-encoded image data - use for one-shot processing
+- `paletteSize` (required): Number of colors to quantize to (positive integer)
+- `maxSize` (optional): Maximum dimension for image resize (default: 2048, only used when `imageBase64` is provided)
+- `seed` (optional): Seed for deterministic output (default: 42). Same input + same seed produces identical results
+- `returnPreview` (optional): If `true`, returns `indexedPreviewPngBase64` with quantized preview image (default: `false`)
+- `minRegionArea` (optional): Minimum region area in pixels for region cleanup (default: 0, meaning off). When > 0, merges small regions to reduce confetti artifacts. Recommended: 50-200 depending on `maxSize`.
+- `mergeSmallRegions` (optional): If `true`, merge regions smaller than `minRegionArea` (default: `true` when `minRegionArea > 0`, `false` otherwise)
+
+**Output:**
+
+On success (`ok: true`):
+```json
+{
+  "ok": true,
+  "width": 800,
+  "height": 600,
+  "palette": [
+    {
+      "rgb": { "r": 255, "g": 0, "b": 0 },
+      "hex": "#FF0000",
+      "lab": { "l": 53.24, "a": 80.09, "b": 67.20 },
+      "count": 5000,
+      "percent": 50.0,
+      "dmcMatch": {
+        "ok": true,
+        "best": {
+          "id": "DMC-666",
+          "name": "Bright Christmas Red",
+          "hex": "#E31D42",
+          "deltaE": 8.45
+        },
+        "alternatives": [...],
+        "method": "lab-d65-deltae76"
+      }
+    }
+  ],
+  "regions": [
+    {
+      "labelIndex": 0,
+      "areaPx": 5000,
+      "bbox": {
+        "x0": 0,
+        "y0": 0,
+        "x1": 400,
+        "y1": 300
+      },
+      "contours": [
+        [
+          { "x": 0, "y": 0 },
+          { "x": 400, "y": 0 },
+          { "x": 400, "y": 300 },
+          { "x": 0, "y": 300 },
+          { "x": 0, "y": 0 }
+        ]
+      ]
+    }
+  ],
+  "totalPixels": 10000,
+  "method": "lab-kmeans-deltae76-contours",
+  "indexedPreviewPngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVR4nGP4z8CABzGMSjNgCRYAt8pjnQuW8k0AAAAASUVORK5CYII="
+}
+```
+
+**Note:** `indexedPreviewPngBase64` is only included when `returnPreview: true`. It contains a base64-encoded PNG image where each pixel is replaced by its cluster mean color, at the resized working dimensions (`maxSize`).
+
+On error (`ok: false`):
+```json
+{
+  "ok": false,
+  "error": "Either 'imageId' or 'imageBase64' must be provided"
+}
+```
+
+**Fields:**
+- `width`: Image width in pixels after optional resizing
+- `height`: Image height in pixels after optional resizing
+- `palette`: Array of palette colors sorted by pixel count (descending)
+  - `rgb`: RGB color values (0-255)
+  - `hex`: Hex color code
+  - `lab`: Lab color space coordinates
+  - `count`: Number of pixels assigned to this color
+  - `percent`: Percentage of total pixels (0-100)
+  - `dmcMatch`: DMC thread match for this palette color
+- `regions`: Array of regions, each containing:
+  - `labelIndex`: Cluster index (palette color index) for this region
+  - `areaPx`: Number of pixels in this region
+  - `bbox`: Bounding box of the region
+    - `x0`: Minimum x coordinate (inclusive)
+    - `y0`: Minimum y coordinate (inclusive)
+    - `x1`: Maximum x coordinate (exclusive)
+    - `y1`: Maximum y coordinate (exclusive)
+  - `contours`: Array of polylines (contours) for this region
+    - Each contour is an array of `{x, y}` points in image pixel coordinates
+    - Contours are closed (first and last points are the same)
+    - Multiple contours per region are possible (e.g., for regions with holes)
+- `method`: Quantization method used (`lab-kmeans-deltae76-contours`)
+- `indexedPreviewPngBase64` (optional): Base64-encoded PNG preview image showing quantized result. Only present when `returnPreview: true`.
+
+**Notes:**
+- Uses k-means clustering in Lab color space for perceptually uniform quantization
+- Palette colors are sorted by pixel count (most common first)
+- Each palette color includes a DMC thread match using the same matching algorithm as `match_dmc`
+- Supports both session mode (using `imageId`) and one-shot mode (using `imageBase64`)
+- Images are automatically resized to `maxSize` for memory efficiency
+- **Deterministic output**: Same input + same `seed` produces identical results. Default seed is `42`.
+- **Contour extraction**: Uses border-following algorithm (Moore neighborhood tracing) to extract region boundaries as polylines. Contours are extracted in image pixel coordinates.
+- **Region cleanup**: When `minRegionArea > 0`, performs connected-components analysis (4-connected) and merges small regions into neighboring regions using majority adjacency. This reduces confetti artifacts from quantization.
+- **Phase 2 implementation**: Includes contour extraction, but no SVG generation, no text labels
 
 ## Adding a New Tool
 
@@ -657,6 +791,53 @@ npm run test:watch
 ```
 
 Tests use Vitest and can call handlers directly without requiring an MCP client.
+
+## Demo UI
+
+A minimal web demo UI is available to test the blueprint generation functionality.
+
+### Running the Demo
+
+Start the demo server:
+
+```bash
+npm run demo
+```
+
+This will start a simple HTTP server on `http://localhost:3001`. Open the URL in your browser to access the demo UI.
+
+### Demo Features
+
+The demo UI provides:
+
+- **Image Upload**: Drag and drop or click to upload an image
+- **Palette Size Slider**: Adjust the number of colors (2-30, default: 15)
+- **Min Region Area Slider**: Control region cleanup threshold (0-500, default: 100)
+- **Generate Button**: Process the image and generate a blueprint
+- **Preview Display**: Shows the quantized preview image
+- **Palette List**: Displays all colors with:
+  - Color swatch
+  - Hex color code
+  - DMC thread match (ID and name)
+  - Percentage of image covered
+
+### Demo Architecture
+
+The demo consists of:
+
+- `demo/server.ts`: Simple HTTP server wrapper that exposes `generate_blueprint_v1` handler via REST API
+- `demo/index.html`: Standalone web UI that communicates with the server via fetch API
+
+The demo server runs independently from the main MCP server and can be used for testing and demonstration purposes.
+
+### Building the Demo
+
+To build the demo for production:
+
+```bash
+npm run demo:build
+npm run demo:start
+```
 
 ## License
 
