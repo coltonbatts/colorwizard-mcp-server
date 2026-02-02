@@ -4,6 +4,7 @@
 
 'use client';
 
+import React from 'react';
 import { useBlueprintStore } from '@/store/blueprintStore';
 import type { PaletteColor } from '@/lib/api/blueprint';
 
@@ -11,6 +12,7 @@ export function PalettePanel() {
   const lastResponse = useBlueprintStore((state) => state.lastResponse);
   const highlightedColorIndex = useBlueprintStore((state) => state.highlightedColorIndex);
   const setHighlightedColorIndex = useBlueprintStore((state) => state.setHighlightedColorIndex);
+  const [copied, setCopied] = React.useState(false);
 
   const palette = lastResponse?.palette || [];
 
@@ -28,20 +30,39 @@ export function PalettePanel() {
   // Sort by percent descending
   const sortedPalette = [...palette].sort((a, b) => b.percent - a.percent);
 
-  // Copy thread list functionality
-  const copyThreadList = () => {
+  // Copy thread list functionality with fallback
+  const copyThreadList = async () => {
     const threadList = sortedPalette
-      .map((color, index) => {
+      .map((color) => {
         if (color.dmcMatch?.ok && color.dmcMatch.best) {
-          return `${index + 1}. ${color.dmcMatch.best.id} - ${color.dmcMatch.best.name} (${color.percent.toFixed(1)}%)`;
+          return `DMC ${color.dmcMatch.best.id} — ${color.dmcMatch.best.name} — ${color.percent.toFixed(1)}%`;
         }
-        return `${index + 1}. Color ${index + 1} - ${color.hex} (${color.percent.toFixed(1)}%)`;
+        return `Color ${color.hex} — ${color.percent.toFixed(1)}%`;
       })
       .join('\n');
     
-    navigator.clipboard.writeText(threadList).then(() => {
-      // Could add a toast notification here
-    });
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(threadList);
+      } else {
+        // Fallback to textarea method
+        const textarea = document.createElement('textarea');
+        textarea.value = threadList;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      
+      // Show confirmation
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error('Failed to copy thread list:', err);
+    }
   };
 
   return (
@@ -50,12 +71,19 @@ export function PalettePanel() {
         <h2 className="text-base font-semibold text-white uppercase tracking-wide">
           THREADS REQUIRED
         </h2>
-        <button
-          onClick={copyThreadList}
-          className="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-white rounded border border-gray-700 transition-colors"
-        >
-          Copy Thread List
-        </button>
+        <div className="relative">
+          <button
+            onClick={copyThreadList}
+            className="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-white rounded border border-gray-700 transition-colors"
+          >
+            Copy Thread List
+          </button>
+          {copied && (
+            <span className="absolute -top-6 right-0 px-2 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/50 rounded whitespace-nowrap">
+              Copied
+            </span>
+          )}
+        </div>
       </div>
       <div className="space-y-3 flex-1 overflow-y-auto">
         {sortedPalette.map((color, index) => (

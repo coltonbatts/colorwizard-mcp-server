@@ -770,14 +770,30 @@ function BlueprintOutputPanel({
   statusMessage,
   mode 
 }: BlueprintOutputPanelProps) {
-  // Determine status text
-  const getStatusText = () => {
+  // Determine status text and pill
+  const getStatusInfo = () => {
     if (loading) {
-      if (statusMessage) return statusMessage;
-      return mode === 'fast' ? 'Fast Preview' : 'Final Preview';
+      if (statusMessage) {
+        return {
+          text: statusMessage,
+          pill: mode === 'fast' ? 'FAST' : 'FINAL',
+          showSpinner: mode === 'final'
+        };
+      }
+      return {
+        text: mode === 'fast' ? 'Fast Preview' : 'Final Preview',
+        pill: mode === 'fast' ? 'FAST' : 'FINAL',
+        showSpinner: mode === 'final'
+      };
     }
-    return 'Ready';
+    return {
+      text: 'Ready',
+      pill: 'READY',
+      showSpinner: false
+    };
   };
+
+  const statusInfo = getStatusInfo();
 
   return (
     <div className="h-[600px] lg:h-[900px] flex flex-col">
@@ -785,9 +801,23 @@ function BlueprintOutputPanel({
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
           BLUEPRINT OUTPUT
         </h3>
-        <span className="text-xs text-gray-500">
-          {getStatusText()}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">
+            {statusInfo.text}
+          </span>
+          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+            statusInfo.pill === 'FAST' 
+              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
+              : statusInfo.pill === 'FINAL'
+              ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+              : 'bg-green-500/20 text-green-400 border border-green-500/50'
+          }`}>
+            {statusInfo.pill}
+          </span>
+          {statusInfo.showSpinner && (
+            <div className="w-3 h-3 border-2 border-purple-400/50 border-t-purple-400 rounded-full animate-spin" />
+          )}
+        </div>
       </div>
       <div className="flex-1 bg-black rounded border border-gray-800 relative">
         <BlueprintCanvas
@@ -813,6 +843,7 @@ interface ReferenceImagePanelProps {
 
 function ReferenceImagePanel({ originalPreviewUrl, highlightThreshold }: ReferenceImagePanelProps) {
   const [isCollapsed, setIsCollapsed] = React.useState(true); // Default collapsed
+  const [viewMode, setViewMode] = React.useState<'fit' | '1:1'>('fit'); // 'fit' = contain, '1:1' = native scale
 
   if (!originalPreviewUrl) return null;
 
@@ -829,13 +860,46 @@ function ReferenceImagePanel({ originalPreviewUrl, highlightThreshold }: Referen
       </button>
       {!isCollapsed && (
         <div className="h-[400px] p-2">
-          <div className="h-full bg-black rounded border border-gray-800 relative" style={{ objectFit: 'contain' }}>
-            <BlueprintCanvas
-              previewBase64={null}
-              originalImageUrl={originalPreviewUrl}
-              highlightColor={null}
-              highlightThreshold={highlightThreshold}
-            />
+          <div className="flex items-center justify-end gap-2 mb-2">
+            <button
+              onClick={() => setViewMode('fit')}
+              className={`px-2 py-1 text-xs rounded border transition-colors ${
+                viewMode === 'fit'
+                  ? 'bg-orange-500/20 text-orange-400 border-orange-500/50'
+                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'
+              }`}
+            >
+              Fit
+            </button>
+            <button
+              onClick={() => setViewMode('1:1')}
+              className={`px-2 py-1 text-xs rounded border transition-colors ${
+                viewMode === '1:1'
+                  ? 'bg-orange-500/20 text-orange-400 border-orange-500/50'
+                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'
+              }`}
+            >
+              1:1
+            </button>
+          </div>
+          <div 
+            className="h-full bg-black rounded border border-gray-800 relative overflow-hidden"
+          >
+            <div
+              className="w-full h-full"
+              style={{
+                transform: viewMode === '1:1' ? 'scale(2)' : 'scale(1)',
+                transformOrigin: 'center center',
+                transition: 'transform 0.2s ease-out',
+              }}
+            >
+              <BlueprintCanvas
+                previewBase64={null}
+                originalImageUrl={originalPreviewUrl}
+                highlightColor={null}
+                highlightThreshold={highlightThreshold}
+              />
+            </div>
           </div>
         </div>
       )}
