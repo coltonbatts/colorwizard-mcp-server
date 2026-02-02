@@ -18,28 +18,55 @@ export function PalettePanel() {
     return (
       <div className="p-4 bg-gray-900 rounded-lg border border-gray-800">
         <h2 className="text-lg font-semibold text-white uppercase tracking-wide mb-4">
-          Palette
+          Thread List
         </h2>
-        <p className="text-gray-500 text-sm">Upload an image to generate a palette</p>
+        <p className="text-gray-500 text-sm">Upload an image to generate a thread list</p>
       </div>
     );
   }
 
+  // Sort by percent descending
+  const sortedPalette = [...palette].sort((a, b) => b.percent - a.percent);
+
+  // Copy thread list functionality
+  const copyThreadList = () => {
+    const threadList = sortedPalette
+      .map((color, index) => {
+        if (color.dmcMatch?.ok && color.dmcMatch.best) {
+          return `${index + 1}. ${color.dmcMatch.best.id} - ${color.dmcMatch.best.name} (${color.percent.toFixed(1)}%)`;
+        }
+        return `${index + 1}. Color ${index + 1} - ${color.hex} (${color.percent.toFixed(1)}%)`;
+      })
+      .join('\n');
+    
+    navigator.clipboard.writeText(threadList).then(() => {
+      // Could add a toast notification here
+    });
+  };
+
   return (
     <div className="p-4 bg-gray-900 rounded-lg border border-gray-800">
-      <h2 className="text-lg font-semibold text-white uppercase tracking-wide mb-4">
-        Palette ({palette.length} colors)
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-white uppercase tracking-wide">
+          Thread List ({palette.length} colors)
+        </h2>
+        <button
+          onClick={copyThreadList}
+          className="px-3 py-1 text-sm bg-gray-800 hover:bg-gray-700 text-white rounded border border-gray-700 transition-colors"
+        >
+          Copy Thread List
+        </button>
+      </div>
       <div className="space-y-2 max-h-[600px] overflow-y-auto">
-        {palette.map((color, index) => (
+        {sortedPalette.map((color, index) => (
           <PaletteItem
             key={index}
             color={color}
-            index={index}
-            isHighlighted={highlightedColorIndex === index}
+            index={palette.indexOf(color)}
+            isHighlighted={highlightedColorIndex === palette.indexOf(color)}
             onToggleHighlight={() => {
               setHighlightedColorIndex(
-                highlightedColorIndex === index ? null : index
+                highlightedColorIndex === palette.indexOf(color) ? null : palette.indexOf(color)
               );
             }}
           />
@@ -64,42 +91,63 @@ function PaletteItem({ color, index, isHighlighted, onToggleHighlight }: Palette
     color.rgb[2] / 255,
   ];
 
+  const hasDmcMatch = color.dmcMatch?.ok && color.dmcMatch.best;
+  const isLoadingDmc = !hasDmcMatch && color.dmcMatch?.ok === false;
+
   return (
     <button
       onClick={onToggleHighlight}
-      className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all ${
+      className={`w-full flex items-center gap-4 p-4 rounded-lg border transition-all ${
         isHighlighted
           ? 'bg-orange-500/20 border-orange-500 ring-2 ring-orange-500'
           : 'bg-gray-800 border-gray-700 hover:border-gray-600'
       }`}
     >
-      {/* Color swatch */}
+      {/* Color swatch - larger */}
       <div
-        className="w-12 h-12 rounded border border-gray-600 flex-shrink-0"
+        className="w-16 h-16 rounded border-2 border-gray-600 flex-shrink-0"
         style={{ backgroundColor: color.hex }}
       />
 
-      {/* Color info */}
+      {/* Color info - more prominent */}
       <div className="flex-1 min-w-0 text-left">
-        <div className="font-semibold text-white text-sm">{color.hex}</div>
-        <div className="text-xs text-gray-400 mt-1">
-          {color.dmcMatch?.ok && color.dmcMatch.best ? (
-            <>
-              {color.dmcMatch.best.id} - {color.dmcMatch.best.name}
-              {color.dmcMatch.best.deltaE !== undefined && (
-                <span className="ml-2 text-gray-500">
-                  (ΔE: {color.dmcMatch.best.deltaE.toFixed(2)})
-                </span>
-              )}
-            </>
-          ) : (
-            'No DMC match'
-          )}
-        </div>
+        {hasDmcMatch ? (
+          <>
+            <div className="font-bold text-white text-base">
+              {color.dmcMatch.best.id}
+            </div>
+            <div className="text-sm text-gray-300 mt-1">
+              {color.dmcMatch.best.name}
+            </div>
+            {color.dmcMatch.best.deltaE !== undefined && (
+              <div className="text-xs text-gray-500 mt-1">
+                ΔE: {color.dmcMatch.best.deltaE.toFixed(2)}
+              </div>
+            )}
+          </>
+        ) : isLoadingDmc ? (
+          <>
+            <div className="font-semibold text-gray-400 text-base">
+              Color {index + 1}
+            </div>
+            <div className="text-sm text-gray-500 mt-1">
+              Loading thread match...
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="font-semibold text-gray-400 text-base">
+              Color {index + 1}
+            </div>
+            <div className="text-sm text-gray-500 mt-1">
+              {color.hex}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Percentage */}
-      <div className="text-white font-semibold text-sm min-w-[4rem] text-right">
+      {/* Percentage - larger */}
+      <div className="text-white font-bold text-lg min-w-[5rem] text-right">
         {color.percent.toFixed(1)}%
       </div>
     </button>

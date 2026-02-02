@@ -8,6 +8,7 @@ import { URL } from "url";
 import { join } from "path";
 import { generateBlueprintV1Handler, type GenerateBlueprintV1Input } from "../src/tools/generate_blueprint_v1.js";
 import { imageRegisterHandler, type ImageRegisterInput } from "../src/tools/sample_color.js";
+import { matchDmcHandler, type MatchDmcInput } from "../src/tools/match_dmc.js";
 
 const PORT = process.env.DEMO_PORT ? parseInt(process.env.DEMO_PORT) : 3001;
 
@@ -76,6 +77,46 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // Batch DMC matching endpoint (for progressive loading)
+    if (urlPath === "/api/match-dmc-batch" && req.method === "POST") {
+        let body = "";
+        
+        req.on("data", (chunk) => {
+            body += chunk.toString();
+        });
+
+        req.on("end", async () => {
+            try {
+                const input: { colors: Array<{ r: number; g: number; b: number }> } = JSON.parse(body);
+                
+                // Validate input
+                if (!Array.isArray(input.colors)) {
+                    res.writeHead(400, { "Content-Type": "application/json" });
+                    res.end(JSON.stringify({ ok: false, error: "colors must be an array" }));
+                    return;
+                }
+
+                // Match each color
+                const results = input.colors.map((rgb) => {
+                    const matchInput: MatchDmcInput = { rgb };
+                    return matchDmcHandler(matchInput);
+                });
+
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ ok: true, matches: results }));
+            } catch (error) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(
+                    JSON.stringify({
+                        ok: false,
+                        error: error instanceof Error ? error.message : "Unknown error",
+                    })
+                );
+            }
+        });
+        return;
+    }
+
     // Generate blueprint endpoint
     if (urlPath === "/api/generate-blueprint-v1" && req.method === "POST") {
         let body = "";
@@ -109,6 +150,7 @@ const server = http.createServer((req, res) => {
                     returnPreview: input.returnPreview !== undefined ? input.returnPreview : true,
                     minRegionArea: input.minRegionArea || 0,
                     mergeSmallRegions: input.mergeSmallRegions !== undefined ? input.mergeSmallRegions : (input.minRegionArea ? true : false),
+                    includeDmc: input.includeDmc !== undefined ? input.includeDmc : true, // Default to true for backward compatibility
                 };
 
                 const result = await generateBlueprintV1Handler(requestInput);

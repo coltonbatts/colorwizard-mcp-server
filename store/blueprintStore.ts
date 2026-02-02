@@ -41,6 +41,14 @@ export interface BlueprintState {
   // Cache
   cache: Map<string, GenerateBlueprintV1Response>;
   
+  // Per-color DMC cache (keyed by hex string for fast lookups)
+  dmcCache: Map<string, {
+    ok: boolean;
+    best?: any;
+    alternatives?: any[];
+    method?: string;
+  }>;
+  
   // Actions
   setImageId: (imageId: string | null) => void;
   setOriginalPreviewUrl: (url: string | null) => void;
@@ -55,11 +63,13 @@ export interface BlueprintState {
   setMockMode: (enabled: boolean) => void;
   cacheResponse: (key: string, response: GenerateBlueprintV1Response) => void;
   getCachedResponse: (key: string) => GenerateBlueprintV1Response | undefined;
+  cacheDmcMatch: (hex: string, dmcMatch: { ok: boolean; best?: any; alternatives?: any[]; method?: string }) => void;
+  getCachedDmcMatch: (hex: string) => { ok: boolean; best?: any; alternatives?: any[]; method?: string } | undefined;
   reset: () => void;
 }
 
 const defaultParams: BlueprintParams = {
-  paletteSize: 12,
+  paletteSize: 18, // Default optimized for common 15-20 color range
   minRegionArea: 40,
   mergeSmallRegions: true,
   seed: 42,
@@ -94,6 +104,9 @@ function getDefaultHighQualityPreview(): boolean {
  * PRODUCTION SAFETY: In production (NODE_ENV=production), mock mode MUST default to false
  * regardless of env vars to prevent accidental mock mode in production.
  * 
+ * DEVELOPMENT DEFAULT: In development, defaults to true (mock mode) for instant testing
+ * without requiring a demo server. Can be overridden with NEXT_PUBLIC_BLUEPRINT_MOCK=0
+ * 
  * SSR-safe: Returns false during SSR, will be updated in useEffect on mount
  */
 function getDefaultMockMode(): boolean {
@@ -105,8 +118,14 @@ function getDefaultMockMode(): boolean {
   // SSR-safe: return false during SSR, will be updated in useEffect on mount
   if (typeof window === 'undefined') return false;
   
-  // Development only: check env var
-  return process.env.NEXT_PUBLIC_BLUEPRINT_MOCK === '1';
+  // Development: default to mock mode (true) unless explicitly disabled
+  // Allow override with NEXT_PUBLIC_BLUEPRINT_MOCK=0 to disable mock mode
+  if (process.env.NEXT_PUBLIC_BLUEPRINT_MOCK === '0') {
+    return false;
+  }
+  
+  // Default to mock mode in development for instant testing
+  return true;
 }
 
 export const useBlueprintStore = create<BlueprintState>((set, get) => ({
@@ -123,13 +142,19 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
   highQualityPreview: getDefaultHighQualityPreview(),
   mockMode: getDefaultMockMode(),
   cache: new Map(),
+  dmcCache: new Map(),
 
   // Actions
   setImageId: (imageId) => set({ imageId }),
   setOriginalPreviewUrl: (url) => set({ originalPreviewUrl: url }),
-  updateParams: (updates) => set((state) => ({
-    params: { ...state.params, ...updates },
-  })),
+  updateParams: (updates) => set((state) => {
+    const newParams = { ...state.params, ...updates };
+    // Clamp paletteSize to valid range [2, 40]
+    if (newParams.paletteSize !== undefined) {
+      newParams.paletteSize = Math.max(2, Math.min(40, Math.round(newParams.paletteSize)));
+    }
+    return { params: newParams };
+  }),
   setLastResponse: (response) => set({ lastResponse: response }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
@@ -156,6 +181,17 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
     set({ cache: new Map(cache) });
   },
   getCachedResponse: (key) => get().cache.get(key),
+  cacheDmcMatch: (hex, dmcMatch) => {
+    const dmcCache = get().dmcCache;
+    // Limit cache size to 200 entries (enough for many palettes)
+    if (dmcCache.size >= 200) {
+      const firstKey = dmcCache.keys().next().value;
+      dmcCache.delete(firstKey);
+    }
+    dmcCache.set(hex, dmcMatch);
+    set({ dmcCache: new Map(dmcCache) });
+  },
+  getCachedDmcMatch: (hex) => get().dmcCache.get(hex),
   reset: () => {
     // PRODUCTION SAFETY: Ensure mockMode respects production guard even on reset
     const safeMockMode = (() => {
@@ -178,6 +214,7 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
       highQualityPreview: getDefaultHighQualityPreview(),
       mockMode: safeMockMode,
       cache: new Map(),
+      dmcCache: new Map(),
     });
   },
 }));

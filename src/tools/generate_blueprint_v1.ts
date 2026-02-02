@@ -18,6 +18,7 @@ export interface GenerateBlueprintV1Input {
     returnPreview?: boolean; // If true, return indexedPreviewPngBase64 (default: false)
     minRegionArea?: number; // Minimum region area in pixels (default: 0, meaning off)
     mergeSmallRegions?: boolean; // If true, merge regions smaller than minRegionArea (default: false unless minRegionArea > 0)
+    includeDmc?: boolean; // If false, skip DMC matching for faster responses (default: true)
 }
 
 export interface PaletteColor {
@@ -384,9 +385,17 @@ function quantizeLab(
 /**
  * Generates a blueprint v1: quantizes image into N colors and returns palette with DMC matches
  */
+// Performance timing helper (works in both Node.js and browser)
+const perfNow = typeof performance !== 'undefined' && performance.now 
+    ? () => performance.now()
+    : () => Date.now();
+
 export async function generateBlueprintV1Handler(
     input: GenerateBlueprintV1Input
 ): Promise<GenerateBlueprintV1Output> {
+    const perfStart = perfNow();
+    const perfMarks: Record<string, number> = {};
+    
     const {
         imageId,
         imageBase64,
@@ -396,6 +405,7 @@ export async function generateBlueprintV1Handler(
         returnPreview = false,
         minRegionArea = 0,
         mergeSmallRegions: mergeSmallRegionsParam,
+        includeDmc = true, // New parameter: skip DMC matching for fast requests
     } = input;
 
     // Determine if region merging should be enabled
@@ -498,6 +508,8 @@ export async function generateBlueprintV1Handler(
             };
         }
 
+        perfMarks.imageLoad = perfNow() - perfStart;
+
         // Extract all pixels as RGB (skip alpha channel)
         const pixels: RGB[] = [];
         for (let i = 0; i < imageBuffer.length; i += 4) {
@@ -518,16 +530,21 @@ export async function generateBlueprintV1Handler(
         }
 
         // Convert RGB pixels to Lab
+        const labStart = perfNow();
         const labPixels = pixels.map((rgb) => rgbToLab(rgb));
+        perfMarks.rgbToLab = perfNow() - labStart;
 
         // Initialize seeded RNG for deterministic k-means
         const rng = new SeededRNG(seed);
 
         // Quantize using k-means in Lab space
+        const kmeansStart = perfNow();
         let { clusters: labCentroids, labels } = quantizeLab(labPixels, paletteSize, rng);
+        perfMarks.kmeans = perfNow() - kmeansStart;
 
         // Region cleanup: merge small regions if enabled
         if (shouldMergeRegions) {
+            const regionStart = perfNow();
             // Extract connected components (regions) per cluster label
             const { regions } = extractRegions(width, height, labels);
 
@@ -541,6 +558,7 @@ export async function generateBlueprintV1Handler(
                 labPixels,
                 false // Use majority adjacency (simpler)
             );
+            perfMarks.regionCleanup = perfNow() - regionStart;
         }
 
         // Count pixels per cluster and compute mean RGB for each cluster (after merging)
@@ -556,7 +574,10 @@ export async function generateBlueprintV1Handler(
         });
 
         // Build palette with mean RGB values
+        const paletteStart = perfNow();
         const palette: PaletteColor[] = [];
+        const dmcStart = perfNow();
+        
         for (let i = 0; i < labCentroids.length; i++) {
             const count = clusterCounts[i];
             const percent = (count / totalPixels) * 100;
@@ -573,8 +594,22 @@ export async function generateBlueprintV1Handler(
             const hex = rgbToHex(rgb);
             const lab = labCentroids[i]; // Use Lab centroid from k-means
 
-            // Get DMC match for this palette color
-            const matchResult = matchDmcHandler({ rgb });
+            // Get DMC match for this palette color (only if includeDmc is true)
+            let dmcMatch;
+            if (includeDmc) {
+                const matchResult = matchDmcHandler({ rgb });
+                dmcMatch = {
+                    ok: matchResult.ok,
+                    best: matchResult.best,
+                    alternatives: matchResult.alternatives,
+                    method: matchResult.method || "lab-d65-deltae76",
+                };
+            } else {
+                // Skip DMC matching for fast requests
+                dmcMatch = {
+                    ok: false,
+                };
+            }
 
             palette.push({
                 rgb,
@@ -582,14 +617,12 @@ export async function generateBlueprintV1Handler(
                 lab,
                 count,
                 percent: Math.round(percent * 100) / 100, // Round to 2 decimal places
-                dmcMatch: {
-                    ok: matchResult.ok,
-                    best: matchResult.best,
-                    alternatives: matchResult.alternatives,
-                    method: matchResult.method || "lab-d65-deltae76",
-                },
+                dmcMatch,
             });
         }
+        
+        perfMarks.paletteBuild = perfNow() - paletteStart;
+        perfMarks.dmcMatching = perfNow() - dmcStart;
 
         // Sort palette by count (descending)
         palette.sort((a, b) => b.count - a.count);
@@ -597,6 +630,7 @@ export async function generateBlueprintV1Handler(
         // Generate preview image if requested
         let indexedPreviewPngBase64: string | undefined;
         if (returnPreview) {
+            const previewStart = perfNow();
             // Create a map from original cluster index to RGB (before palette sorting)
             const clusterRgbMap: RGB[] = [];
             for (let i = 0; i < paletteSize; i++) {
@@ -634,6 +668,21 @@ export async function generateBlueprintV1Handler(
                 .toBuffer();
 
             indexedPreviewPngBase64 = previewBuffer.toString("base64");
+            perfMarks.previewEncode = perfNow() - previewStart;
+        }
+
+        const totalTime = perfNow() - perfStart;
+        
+        // Log performance metrics (only in development or when explicitly enabled)
+        if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_PERF_LOGS === '1') {
+            console.log(`[PERF] generateBlueprintV1 (paletteSize=${paletteSize}, maxSize=${maxSize}, includeDmc=${includeDmc}):`);
+            console.log(`  Total: ${totalTime.toFixed(2)}ms`);
+            Object.entries(perfMarks).forEach(([key, value]) => {
+                console.log(`  ${key}: ${value.toFixed(2)}ms (${((value / totalTime) * 100).toFixed(1)}%)`);
+            });
+            if (returnPreview && indexedPreviewPngBase64) {
+                console.log(`  Preview size: ${(indexedPreviewPngBase64.length / 1024).toFixed(1)}KB`);
+            }
         }
 
         return {
