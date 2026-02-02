@@ -38,8 +38,7 @@ export function BlueprintControls() {
                 updateParams({ paletteSize: value });
               }
             }}
-            disabled={loading}
-            className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
           />
           <span className="text-white font-semibold min-w-[3rem] text-right">
             {params.paletteSize}
@@ -65,8 +64,7 @@ export function BlueprintControls() {
                 updateParams({ minRegionArea: value });
               }
             }}
-            disabled={loading}
-            className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
           />
           <span className="text-white font-semibold min-w-[3rem] text-right">
             {params.minRegionArea}
@@ -83,8 +81,7 @@ export function BlueprintControls() {
           type="checkbox"
           checked={params.mergeSmallRegions}
           onChange={(e) => updateParams({ mergeSmallRegions: e.target.checked })}
-          disabled={loading}
-          className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2"
         />
       </div>
 
@@ -97,8 +94,7 @@ export function BlueprintControls() {
           type="checkbox"
           checked={mockMode}
           onChange={(e) => setMockMode(e.target.checked)}
-          disabled={loading}
-          className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2"
         />
       </div>
 
@@ -112,8 +108,7 @@ export function BlueprintControls() {
             type="checkbox"
             checked={highQualityPreview}
             onChange={(e) => setHighQualityPreview(e.target.checked)}
-            disabled={loading}
-            className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2"
           />
         </div>
         <p className="text-xs text-gray-500 pl-0">

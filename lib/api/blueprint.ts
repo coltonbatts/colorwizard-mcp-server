@@ -3,11 +3,15 @@
  */
 
 // Use NEXT_PUBLIC_DEMO_ORIGIN for explicit demo server origin
-// Defaults to http://localhost:3001 in development
+// Defaults to http://localhost:3001 to match demo/server.ts default port
+// Can be overridden via NEXT_PUBLIC_DEMO_ORIGIN env var or DEMO_PORT env var on server side
 const DEMO_ORIGIN = process.env.NEXT_PUBLIC_DEMO_ORIGIN || 
   (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
     ? 'http://localhost:3001' 
     : 'http://localhost:3001');
+
+// Export for diagnostics display
+export const getDemoOrigin = () => DEMO_ORIGIN;
 
 // Module-level variable to track mock mode (set from page component)
 // PRODUCTION SAFETY: Initialize to false - production must never start in mock mode
@@ -360,18 +364,34 @@ export async function registerImage(
     return mockRegisterImage(input, signal);
   }
 
-  const response = await fetch(`${DEMO_ORIGIN}/api/image-register`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(input),
-    signal,
-  });
+  const endpoint = `${DEMO_ORIGIN}/api/image-register`;
+  let response: Response;
+  
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+      signal,
+    });
+  } catch (err) {
+    // Connection refused, network error, etc.
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    throw new Error(
+      `Cannot reach demo server at ${DEMO_ORIGIN}. ` +
+      `Error: ${errorMessage}. ` +
+      `Make sure the demo server is running: npm run demo (default port: 3001, override with DEMO_PORT env var). ` +
+      `Or set NEXT_PUBLIC_DEMO_ORIGIN to match your server port.`
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+    throw new Error(
+      `Demo server error (${DEMO_ORIGIN}): HTTP ${response.status}: ${errorText || response.statusText}`
+    );
   }
 
   return response.json();
@@ -390,18 +410,34 @@ export async function generateBlueprintV1(
     return mockGenerateBlueprintV1(input, signal, originalImageUrl);
   }
 
-  const response = await fetch(`${DEMO_ORIGIN}/api/generate-blueprint-v1`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(input),
-    signal,
-  });
+  const endpoint = `${DEMO_ORIGIN}/api/generate-blueprint-v1`;
+  let response: Response;
+  
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+      signal,
+    });
+  } catch (err) {
+    // Connection refused, network error, etc.
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    throw new Error(
+      `Cannot reach demo server at ${DEMO_ORIGIN}. ` +
+      `Error: ${errorMessage}. ` +
+      `Make sure the demo server is running: npm run demo (default port: 3001, override with DEMO_PORT env var). ` +
+      `Or set NEXT_PUBLIC_DEMO_ORIGIN to match your server port.`
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+    throw new Error(
+      `Demo server error (${DEMO_ORIGIN}): HTTP ${response.status}: ${errorText || response.statusText}`
+    );
   }
 
   return response.json();

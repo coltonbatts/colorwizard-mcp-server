@@ -108,13 +108,18 @@ Returns: `{ ok: true, palette: PaletteColor[], indexedPreviewPngBase64?: string 
    ```bash
    npm run demo
    ```
-   Runs on `http://localhost:3001`
+   Runs on `http://localhost:3001` by default.
+   
+   To use a different port:
+   ```bash
+   DEMO_PORT=3003 npm run demo
+   ```
 
 2. **Start Next.js dev server**:
    ```bash
    npm run next:dev
    ```
-   Runs on `http://localhost:3000`
+   Runs on `http://localhost:3000` by default.
 
 3. **Open browser**:
    ```
@@ -123,7 +128,14 @@ Returns: `{ ok: true, palette: PaletteColor[], indexedPreviewPngBase64?: string 
 
 ## Environment Variables
 
-- `NEXT_PUBLIC_API_URL` - API base URL (default: `http://localhost:3001`)
+### Client-side (Next.js)
+- `NEXT_PUBLIC_DEMO_ORIGIN` - Demo server origin URL (default: `http://localhost:3001`)
+  - Set this in `.env.local` if your demo server runs on a different port
+  - Example: `NEXT_PUBLIC_DEMO_ORIGIN=http://localhost:3003`
+
+### Server-side (Demo Server)
+- `DEMO_PORT` - Port for demo server to listen on (default: `3001`)
+  - Example: `DEMO_PORT=3003 npm run demo`
 
 ## Default Parameters
 

@@ -851,6 +851,11 @@ A production-grade Next.js UI with Three.js for realtime blueprint preview and i
    npm run demo
    ```
    This runs on `http://localhost:3001` by default.
+   
+   To use a different port:
+   ```bash
+   DEMO_PORT=3003 npm run demo
+   ```
 
 2. In a separate terminal, start the Next.js dev server:
    ```bash
@@ -859,6 +864,11 @@ A production-grade Next.js UI with Three.js for realtime blueprint preview and i
    This runs on `http://localhost:3000` by default.
 
 3. Open `http://localhost:3000/three-blueprint` in your browser.
+
+**Note:** If your demo server runs on a different port, set `NEXT_PUBLIC_DEMO_ORIGIN` in `.env.local`:
+```
+NEXT_PUBLIC_DEMO_ORIGIN=http://localhost:3003
+```
 
 ### Building for Production
 

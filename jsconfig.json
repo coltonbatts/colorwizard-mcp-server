@@ -5,5 +5,11 @@
       "@/*": ["./*"]
     }
   },
+  "include": [
+    "app/**/*",
+    "components/**/*",
+    "lib/**/*",
+    "store/**/*"
+  ],
   "exclude": ["node_modules", "dist", ".next"]
 }

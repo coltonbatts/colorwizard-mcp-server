@@ -9,7 +9,7 @@ import { BlueprintCanvas } from '@/components/three/BlueprintCanvas';
 import { BlueprintControls } from '@/components/controls/BlueprintControls';
 import { PalettePanel, useHighlightColor } from '@/components/palette/PalettePanel';
 import { useBlueprintStore } from '@/store/blueprintStore';
-import { registerImage, generateBlueprintV1, getCacheKey, setMockModeEnabled } from '@/lib/api/blueprint';
+import { registerImage, generateBlueprintV1, getCacheKey, setMockModeEnabled, getDemoOrigin } from '@/lib/api/blueprint';
 
 const DEBOUNCE_MS = 300;
 const FINAL_PREVIEW_DELAY_MS = 700;
@@ -388,7 +388,7 @@ export default function ThreeBlueprintPage() {
           <h1 className="text-3xl font-bold uppercase tracking-wide">
             ThreeJS Live Blueprint
           </h1>
-          {/* Mode badge */}
+          {/* Mode badge and diagnostics */}
           <div className="flex items-center gap-2">
             <span
               className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
@@ -399,6 +399,16 @@ export default function ThreeBlueprintPage() {
             >
               {mockMode ? 'Mock' : 'Live API'}
             </span>
+            {/* Diagnostics */}
+            <div className="text-xs text-gray-500 font-mono">
+              {mockMode ? (
+                <span className="text-yellow-400">Mock Mode</span>
+              ) : (
+                <span className="text-gray-400" title={`Demo server origin: ${getDemoOrigin()}`}>
+                  {getDemoOrigin()}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <p className="text-gray-400 mb-6">
@@ -409,16 +419,25 @@ export default function ThreeBlueprintPage() {
         {error && !mockMode && (
           <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 rounded-lg">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-red-400 font-semibold mb-1">API Error</p>
-                <p className="text-red-300 text-sm">{error}</p>
+              <div className="flex-1">
+                <p className="text-red-400 font-semibold mb-1">API Connection Error</p>
+                <p className="text-red-300 text-sm mb-2">{error}</p>
+                <div className="text-xs text-gray-400 font-mono mt-2 p-2 bg-black/30 rounded">
+                  <div>Current DEMO_ORIGIN: {getDemoOrigin()}</div>
+                  <div className="mt-1">
+                    To fix: Run <code className="text-yellow-400">npm run demo</code> (default port: 3001)
+                  </div>
+                  <div className="mt-1">
+                    Or set <code className="text-yellow-400">NEXT_PUBLIC_DEMO_ORIGIN</code> in .env.local to match your server port
+                  </div>
+                </div>
               </div>
               <button
                 onClick={() => {
                   setMockMode(true);
                   setError(null);
                 }}
-                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded transition-colors"
+                className="ml-4 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded transition-colors whitespace-nowrap"
               >
                 Switch to Mock Mode
               </button>

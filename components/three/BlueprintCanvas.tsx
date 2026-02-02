@@ -65,10 +65,11 @@ export function BlueprintCanvas({
   }, []);
 
   return (
-    <div className="w-full h-full bg-black">
+    <div className="w-full h-full bg-black" style={{ position: 'relative' }}>
       <Canvas
         camera={{ position: [0, 0, 5], fov: 50 }}
         gl={{ antialias: true, alpha: true }}
+        style={{ width: '100%', height: '100%', display: 'block' }}
       >
         <Suspense fallback={null}>
           <ambientLight intensity={1} />

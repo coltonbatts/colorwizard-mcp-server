@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 
 interface TexturePlaneProps {
@@ -21,6 +21,10 @@ export function TexturePlane({
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial | null>(null);
   const previousTextureRef = useRef<THREE.Texture | null>(null);
+  
+  // Track texture image dimensions for aspect ratio calculation
+  // Updated when texture image loads
+  const [textureDimensions, setTextureDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // Create shader material ONCE - only recreate if shader code needs to change
   // For now, we keep the same shader and update via uniforms only
@@ -30,7 +34,9 @@ export function TexturePlane({
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uTexture: { value: texture },
-        uHighlightColor: { value: highlightColor ? new THREE.Vector3(...highlightColor) : null },
+        // SAFETY: Always provide a valid Vector3, never null
+        // Use [0,0,0] when highlightColor is null to prevent shader errors
+        uHighlightColor: { value: highlightColor ? new THREE.Vector3(...highlightColor) : new THREE.Vector3(0, 0, 0) },
         uHighlightThreshold: { value: highlightThreshold },
         uHighlightEnabled: { value: highlightColor !== null },
       },
@@ -88,6 +94,7 @@ export function TexturePlane({
   }, []); // Empty deps - create material once
 
   // Update texture uniform and dispose old texture
+  // Also track when texture image loads to update plane geometry
   useEffect(() => {
     if (materialRef.current && texture) {
       // Dispose previous texture if it exists and is different
@@ -98,15 +105,56 @@ export function TexturePlane({
       materialRef.current.uniforms.uTexture.value = texture;
       materialRef.current.needsUpdate = true;
       previousTextureRef.current = texture;
+      
+      // Check if texture image is already loaded
+      const updateDimensions = () => {
+        if (texture.image && texture.image.width && texture.image.height) {
+          setTextureDimensions({
+            width: texture.image.width,
+            height: texture.image.height,
+          });
+        }
+      };
+      
+      // Check immediately
+      updateDimensions();
+      
+      // If not loaded yet, wait for image to load
+      if (texture.image && texture.image instanceof HTMLImageElement) {
+        const img = texture.image;
+        if (img.complete && img.naturalWidth > 0) {
+          // Image already loaded
+          updateDimensions();
+        } else {
+          // Wait for load event
+          img.onload = updateDimensions;
+          img.onerror = () => {
+            // On error, use default dimensions
+            setTextureDimensions(null);
+          };
+        }
+      }
+    } else {
+      setTextureDimensions(null);
     }
   }, [texture]);
 
   // Update highlight uniforms (no material recreation needed)
   useEffect(() => {
     if (materialRef.current) {
-      materialRef.current.uniforms.uHighlightColor.value = highlightColor
-        ? new THREE.Vector3(...highlightColor)
-        : null;
+      // SAFETY: Always provide a valid Vector3, never null
+      // Use [0,0,0] when highlightColor is null to prevent shader errors
+      if (materialRef.current.uniforms.uHighlightColor.value) {
+        if (highlightColor) {
+          materialRef.current.uniforms.uHighlightColor.value.set(...highlightColor);
+        } else {
+          materialRef.current.uniforms.uHighlightColor.value.set(0, 0, 0);
+        }
+      } else {
+        materialRef.current.uniforms.uHighlightColor.value = highlightColor
+          ? new THREE.Vector3(...highlightColor)
+          : new THREE.Vector3(0, 0, 0);
+      }
       materialRef.current.uniforms.uHighlightEnabled.value = highlightColor !== null;
       materialRef.current.needsUpdate = true;
     }
@@ -121,13 +169,38 @@ export function TexturePlane({
   }, [highlightThreshold]);
 
   // Calculate plane size to maintain aspect ratio
-  const aspectRatio = texture ? texture.image.width / texture.image.height : 1;
-  const planeWidth = Math.min(10, 10 * aspectRatio);
-  const planeHeight = Math.min(10, 10 / aspectRatio);
+  // SAFETY: Use textureDimensions state which is updated when texture loads
+  // Falls back to square (1:1) if texture not loaded yet
+  const aspectRatio = textureDimensions
+    ? textureDimensions.width / textureDimensions.height
+    : 1;
+  
+  // Preserve aspect ratio: fit within a 10x10 unit square
+  // If image is wider (aspectRatio > 1), constrain width to 10 and scale height
+  // If image is taller (aspectRatio < 1), constrain height to 10 and scale width
+  const maxSize = 10;
+  let planeWidth: number;
+  let planeHeight: number;
+  
+  if (aspectRatio >= 1) {
+    // Wider or square: constrain width, scale height
+    planeWidth = maxSize;
+    planeHeight = maxSize / aspectRatio;
+  } else {
+    // Taller: constrain height, scale width
+    planeHeight = maxSize;
+    planeWidth = maxSize * aspectRatio;
+  }
+
+  // Use key to force React Three Fiber to recreate geometry when dimensions change
+  // This ensures the plane updates when texture loads
+  const geometryKey = textureDimensions 
+    ? `${textureDimensions.width}x${textureDimensions.height}` 
+    : 'default';
 
   return (
     <mesh ref={meshRef} position={[0, 0, 0]}>
-      <planeGeometry args={[planeWidth, planeHeight]} />
+      <planeGeometry key={geometryKey} args={[planeWidth, planeHeight]} />
     </mesh>
   );
 }
