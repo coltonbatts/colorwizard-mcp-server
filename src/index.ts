@@ -7,6 +7,7 @@ import {
     McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { tools, toolHandlers } from "./tools/index.js";
 import { analyzeImageRegion } from "./tools/vision.js";
 import { vibeShifter, type ColorArray } from "./tools/vibe.js";
 import { generateStitchPattern } from "./tools/pattern.js";
@@ -48,159 +49,68 @@ export class ColorWizardServer {
 
     private setupToolHandlers() {
         this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-            tools: [
-                {
-                    name: "analyze_image_region",
-                    description: "Extracts precise pixel data from a local image file at specified coordinates.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {
-                            image_path: {
-                                type: "string",
-                                description: "Path to the image file",
-                            },
-                            x: {
-                                type: "number",
-                                description: "X coordinate of the region center",
-                            },
-                            y: {
-                                type: "number",
-                                description: "Y coordinate of the region center",
-                            },
-                            radius: {
-                                type: "number",
-                                description: "Radius of the square region (default: 5)",
-                                default: 5,
-                            },
-                        },
-                        required: ["image_path", "x", "y"],
-                    },
-                },
-                {
-                    name: "match_dmc_thread",
-                    description: "Matches a hex color value to the nearest physical DMC embroidery thread.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {
-                            hex: {
-                                type: "string",
-                                description: "The 6-character hex color code (e.g., #FFFFFF)",
-                                pattern: "^#?[0-9a-fA-F]{6}$",
-                            },
-                        },
-                        required: ["hex"],
-                    },
-                },
-                {
-                    name: "apply_aesthetic_offset",
-                    description: "Modifies an input color array to match specific aesthetic profiles (Lynchian, Southern Gothic, Brutalist).",
-                    inputSchema: {
-                        type: "object",
-                        properties: {
-                            colors: {
-                                type: "array",
-                                description: "Array of color objects with hex and rgb properties",
-                                items: {
-                                    type: "object",
-                                    properties: {
-                                        hex: {
-                                            type: "string",
-                                            description: "6-character hex color code (e.g., #FFFFFF)",
-                                        },
-                                        rgb: {
-                                            type: "object",
-                                            properties: {
-                                                r: { type: "number", description: "Red component (0-255)" },
-                                                g: { type: "number", description: "Green component (0-255)" },
-                                                b: { type: "number", description: "Blue component (0-255)" },
-                                            },
-                                            required: ["r", "g", "b"],
-                                        },
-                                    },
-                                    required: ["hex", "rgb"],
-                                },
-                            },
-                            profile_name: {
-                                type: "string",
-                                description: "Aesthetic profile to apply",
-                                enum: ["Lynchian", "Southern Gothic", "Brutalist"],
-                            },
-                        },
-                        required: ["colors", "profile_name"],
-                    },
-                },
-                {
-                    name: "generate_stitch_pattern",
-                    description: "Transforms a raw image into a symbol-coded cross-stitch grid with matching DMC manifest. Supports optional aesthetic profile application (CW-03).",
-                    inputSchema: {
-                        type: "object",
-                        properties: {
-                            image_path: {
-                                type: "string",
-                                description: "Path to local image file",
-                            },
-                            hoop_size_inches: {
-                                type: "number",
-                                description: "Hoop size in inches (e.g., 5, 8, or 10)",
-                            },
-                            fabric_count: {
-                                type: "number",
-                                description: "Stitches per inch (default: 14)",
-                                default: 14,
-                            },
-                            max_colors: {
-                                type: "number",
-                                description: "Maximum number of DMC threads to use",
-                                default: 50,
-                            },
-                            aesthetic_profile: {
-                                type: "string",
-                                description: "Optional aesthetic profile to apply: 'Lynchian', 'Southern Gothic', or 'Brutalist'",
-                                enum: ["Lynchian", "Southern Gothic", "Brutalist"],
-                            },
-                        },
-                        required: ["image_path", "hoop_size_inches"],
-                    },
-                },
-                {
-                    name: "generate_blueprint",
-                    description: "Transforms an input image into a vector paint-by-number SVG blueprint (Instrument CW-05).",
-                    inputSchema: {
-                        type: "object",
-                        properties: {
-                            image_path: {
-                                type: "string",
-                                description: "Path to the local image file",
-                            },
-                            num_colors: {
-                                type: "number",
-                                description: "Number of color clusters (default: 12)",
-                                default: 12,
-                            },
-                            min_area: {
-                                type: "number",
-                                description: "Minimum region area in pixels (default: 100)",
-                                default: 100,
-                            },
-                            epsilon: {
-                                type: "number",
-                                description: "RDP simplification tolerance (default: 1.0)",
-                                default: 1.0,
-                            },
-                            max_dim: {
-                                type: "number",
-                                description: "Maximum dimension for processing (default: 1024)",
-                                default: 1024,
-                            },
-                        },
-                        required: ["image_path"],
-                    },
-                },
-            ],
+            tools,
         }));
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const toolName = request.params.name;
+
+            // Ping tool handler
+            if (toolName === "ping") {
+                const schema = z.object({
+                    message: z.string().optional(),
+                });
+
+                const parseResult = schema.safeParse(request.params.arguments);
+                if (!parseResult.success) {
+                    throw new McpError(
+                        ErrorCode.InvalidParams,
+                        "Invalid parameters for ping"
+                    );
+                }
+
+                const result = toolHandlers.ping(parseResult.data);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(result, null, 2),
+                        },
+                    ],
+                };
+            }
+
+            // Match DMC tool handler
+            if (toolName === "match_dmc") {
+                const schema = z.object({
+                    rgb: z.object({
+                        r: z.number().min(0).max(255),
+                        g: z.number().min(0).max(255),
+                        b: z.number().min(0).max(255),
+                    }).optional(),
+                    hex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
+                }).refine((data) => data.rgb || data.hex, {
+                    message: "Either 'rgb' or 'hex' must be provided",
+                });
+
+                const parseResult = schema.safeParse(request.params.arguments);
+                if (!parseResult.success) {
+                    throw new McpError(
+                        ErrorCode.InvalidParams,
+                        parseResult.error.issues[0]?.message || "Invalid parameters for match_dmc"
+                    );
+                }
+
+                const result = toolHandlers.match_dmc(parseResult.data);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(result, null, 2),
+                        },
+                    ],
+                };
+            }
 
             if (toolName === "analyze_image_region") {
                 const schema = z.object({
@@ -255,32 +165,6 @@ export class ColorWizardServer {
                         `Failed to analyze image region: ${error instanceof Error ? error.message : "Unknown error"}`
                     );
                 }
-            }
-
-            if (toolName === "match_dmc_thread") {
-                const schema = z.object({
-                    hex: z.string().regex(/^#?[0-9a-fA-F]{6}$/),
-                });
-
-                const parseResult = schema.safeParse(request.params.arguments);
-                if (!parseResult.success) {
-                    throw new McpError(
-                        ErrorCode.InvalidParams,
-                        "Invalid hex color format"
-                    );
-                }
-
-                const { hex } = parseResult.data;
-
-                // Placeholder for physical material matching logic
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Instrument CW-02 (Material Match) invoked for color ${hex}. Logic pending connection to spectral database.`,
-                        },
-                    ],
-                };
             }
 
             if (toolName === "apply_aesthetic_offset") {
