@@ -39,6 +39,12 @@ export default function ThreeBlueprintPage() {
   const statusMessage = useBlueprintStore((state) => state.statusMessage);
   const mode = useBlueprintStore((state) => state.mode);
 
+  // Client-only state to prevent hydration mismatch for mockMode
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Sync mock mode to API layer
   // CRITICAL: This ensures UI state and API layer are always synchronized
   // Runs on mount and whenever mockMode changes
@@ -581,61 +587,82 @@ export default function ThreeBlueprintPage() {
   const hasDmcData = palette.some(c => c.dmcMatch?.ok && c.dmcMatch.best);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto p-4 max-w-7xl">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
-          <div>
-            <h1 className="text-2xl font-bold uppercase tracking-wide">
-              Blueprint
-            </h1>
-            <div className="flex items-center gap-4 mt-2">
-              <span className="text-base text-gray-300">
-                Colors Used: <span className="text-white font-bold text-lg">{palette.length || params.paletteSize}</span>
-              </span>
-              {hasDmcData && (
-                <span className="text-base text-gray-300">
-                  Threads Needed: <span className="text-white font-bold text-lg">{totalThreads}</span>
+    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
+      <div className="container mx-auto p-6 max-w-7xl">
+        {/* App Bar */}
+        <div className="bg-[var(--paper-2)] border-b border-[var(--border)] pb-6 mb-6">
+          {/* Top row: Title + Mode badge + Status pill */}
+          <div className="flex items-start justify-between mb-3 pt-5">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl font-serif font-medium tracking-tight leading-tight text-[var(--ink)]">
+                Magpie Embroidery
+              </h1>
+              <p className="hidden sm:block text-xs text-[var(--muted)] font-sans mt-1">
+                Thread-matched blueprint preview
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+              {/* Mode badge - client-only to prevent hydration mismatch */}
+              {isMounted && (
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-medium uppercase tracking-wide ${
+                    mockMode
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                      : 'bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  {mockMode ? 'Mock' : 'Live'}
+                </span>
+              )}
+              {/* Status pill */}
+              {imageId && (
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-medium uppercase tracking-wide ${
+                  loading && mode === 'fast'
+                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                    : loading && mode === 'final'
+                    ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                    : 'bg-green-100 text-green-700 border border-green-200'
+                }`}>
+                  {loading ? (mode === 'fast' ? 'FAST' : 'FINAL') : 'READY'}
                 </span>
               )}
             </div>
-            {/* DEMO_ORIGIN diagnostics - subtle, secondary */}
-            {!mockMode && (
-              <div className="mt-1">
-                <span className="text-xs text-gray-600">
-                  API: {getDemoOrigin()}
-                </span>
-              </div>
+          </div>
+          {/* Stats row */}
+          <div className="flex items-center gap-6">
+            <span className="text-sm text-[var(--muted)] font-sans">
+              Colors Used: <span className="text-[var(--ink)] font-semibold">{palette.length || params.paletteSize}</span>
+            </span>
+            {hasDmcData && (
+              <span className="text-sm text-[var(--muted)] font-sans">
+                Threads Needed: <span className="text-[var(--ink)] font-semibold">{totalThreads}</span>
+              </span>
             )}
           </div>
-          {/* Mode badge */}
-          <div className="flex items-center gap-2">
-            <span
-              className={`px-3 py-1.5 rounded text-xs font-semibold uppercase ${
-                mockMode
-                  ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
-                  : 'bg-green-500/20 text-green-400 border border-green-500/50'
-              }`}
-            >
-              {mockMode ? 'Mock' : 'Live'}
-            </span>
-          </div>
+          {/* DEMO_ORIGIN - only in Live mode, tiny muted text */}
+          {!mockMode && (
+            <div className="mt-2">
+              <span className="text-[10px] text-[var(--muted)] font-sans opacity-60">
+                {getDemoOrigin()}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Error with switch to mock mode button */}
         {error && !mockMode && (
-          <div className="mb-4 p-4 bg-red-900/20 border border-red-500/50 rounded-lg">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-red-400 font-semibold mb-1">API Connection Error</p>
-                <p className="text-red-300 text-sm">{error}</p>
+                <p className="text-red-800 font-sans font-semibold mb-1">API Connection Error</p>
+                <p className="text-red-700 text-sm font-sans">{error}</p>
               </div>
               <button
                 onClick={() => {
                   setMockMode(true);
                   setError(null);
                 }}
-                className="ml-4 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded transition-colors whitespace-nowrap"
+                className="ml-4 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--ink)] text-[var(--paper)] font-sans font-medium rounded transition-colors whitespace-nowrap text-sm"
               >
                 Switch to Mock Mode
               </button>
@@ -716,11 +743,16 @@ function ColorsUsedControl({}: ColorsUsedControlProps) {
   const threadsNeeded = lastResponse?.palette?.filter(c => c.dmcMatch?.ok && c.dmcMatch.best).length || 0;
 
   return (
-    <div className="p-4 bg-gray-900 rounded-lg border border-gray-800">
-      <label className="block text-base font-semibold text-white mb-3">
-        Colors Used
-      </label>
-      <div className="flex items-center gap-4 mb-2">
+    <div className="p-6 bg-[var(--paper-2)] rounded border border-[var(--border)]">
+      <div className="flex items-center justify-between mb-4">
+        <label className="block text-sm font-sans font-medium text-[var(--ink)]">
+          Colors Used
+        </label>
+        <span className="px-2.5 py-1 bg-[var(--accent)] text-[var(--paper)] font-sans font-semibold text-sm rounded-full min-w-[2.5rem] text-center">
+          {params.paletteSize}
+        </span>
+      </div>
+      <div className="flex items-center gap-4 mb-3">
         <input
           type="range"
           min="2"
@@ -733,19 +765,19 @@ function ColorsUsedControl({}: ColorsUsedControlProps) {
               updateParams({ paletteSize: clampedValue });
             }
           }}
-          className="flex-1 h-4 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+          className="flex-1 h-1 bg-[var(--border)] rounded-full appearance-none cursor-pointer accent-[var(--accent)]"
+          style={{
+            background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${((params.paletteSize - 2) / 38) * 100}%, var(--border) ${((params.paletteSize - 2) / 38) * 100}%, var(--border) 100%)`
+          }}
         />
-        <span className="text-white font-bold text-xl min-w-[3rem] text-right">
-          {params.paletteSize}
-        </span>
       </div>
-      <div className="flex items-center justify-between mt-2">
-        <p className="text-sm text-gray-400">
+      <div className="flex items-center justify-between mt-3">
+        <p className="text-xs text-[var(--muted)] font-sans">
           More colors = more detail, more thread changes
         </p>
         {threadsNeeded > 0 && (
-          <p className="text-sm text-gray-300 font-semibold">
-            Threads Needed: <span className="text-white">{threadsNeeded}</span>
+          <p className="text-xs text-[var(--muted)] font-sans font-medium">
+            Threads Needed: <span className="text-[var(--ink)]">{threadsNeeded}</span>
           </p>
         )}
       </div>
@@ -770,65 +802,49 @@ function BlueprintOutputPanel({
   statusMessage,
   mode 
 }: BlueprintOutputPanelProps) {
-  // Determine status text and pill
-  const getStatusInfo = () => {
-    if (loading) {
-      if (statusMessage) {
-        return {
-          text: statusMessage,
-          pill: mode === 'fast' ? 'FAST' : 'FINAL',
-          showSpinner: mode === 'final'
-        };
-      }
-      return {
-        text: mode === 'fast' ? 'Fast Preview' : 'Final Preview',
-        pill: mode === 'fast' ? 'FAST' : 'FINAL',
-        showSpinner: mode === 'final'
-      };
-    }
-    return {
-      text: 'Ready',
-      pill: 'READY',
-      showSpinner: false
-    };
-  };
-
-  const statusInfo = getStatusInfo();
+  const [viewMode, setViewMode] = React.useState<'fit' | '1:1'>('fit');
 
   return (
     <div className="h-[600px] lg:h-[900px] flex flex-col">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
-          BLUEPRINT OUTPUT
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-serif font-medium text-[var(--muted)] uppercase tracking-wider">
+          Blueprint Output
         </h3>
+        {/* Minimal toolbar */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">
-            {statusInfo.text}
-          </span>
-          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
-            statusInfo.pill === 'FAST' 
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
-              : statusInfo.pill === 'FINAL'
-              ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
-              : 'bg-green-500/20 text-green-400 border border-green-500/50'
-          }`}>
-            {statusInfo.pill}
-          </span>
-          {statusInfo.showSpinner && (
-            <div className="w-3 h-3 border-2 border-purple-400/50 border-t-purple-400 rounded-full animate-spin" />
-          )}
+          <button
+            onClick={() => setViewMode('fit')}
+            className={`px-2.5 py-1 text-[10px] font-sans rounded border transition-colors ${
+              viewMode === 'fit'
+                ? 'bg-[var(--accent)] text-[var(--paper)] border-[var(--accent)]'
+                : 'bg-transparent text-[var(--muted)] border-[var(--border)] hover:bg-[var(--accent-light)]'
+            }`}
+          >
+            Fit
+          </button>
+          <button
+            onClick={() => setViewMode('1:1')}
+            className={`px-2.5 py-1 text-[10px] font-sans rounded border transition-colors ${
+              viewMode === '1:1'
+                ? 'bg-[var(--accent)] text-[var(--paper)] border-[var(--accent)]'
+                : 'bg-transparent text-[var(--muted)] border-[var(--border)] hover:bg-[var(--accent-light)]'
+            }`}
+          >
+            1:1
+          </button>
         </div>
       </div>
-      <div className="flex-1 bg-black rounded border border-gray-800 relative">
+      <div className="flex-1 bg-white rounded border border-[var(--border)] relative shadow-sm overflow-hidden">
         <BlueprintCanvas
           previewBase64={previewBase64}
           originalImageUrl={null}
           highlightColor={highlightColor}
           highlightThreshold={highlightThreshold}
+          viewMode={viewMode}
         />
         {loading && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <div className="text-white text-sm">{statusMessage || 'Processing...'}</div>
+          <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
+            <div className="text-[var(--muted)] text-xs font-sans">{statusMessage || 'Processing...'}</div>
           </div>
         )}
       </div>
@@ -848,42 +864,42 @@ function ReferenceImagePanel({ originalPreviewUrl, highlightThreshold }: Referen
   if (!originalPreviewUrl) return null;
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-800">
+    <div className="bg-[var(--paper-2)] rounded border border-[var(--border)]">
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-800/50 transition-colors"
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-[var(--accent-light)] transition-colors"
       >
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+        <h3 className="text-xs font-serif font-medium text-[var(--muted)] uppercase tracking-wider">
           Reference
         </h3>
-        <span className="text-gray-500">{isCollapsed ? '▶' : '▼'}</span>
+        <span className="text-[var(--muted)] font-sans">{isCollapsed ? '▶' : '▼'}</span>
       </button>
       {!isCollapsed && (
-        <div className="h-[400px] p-2">
-          <div className="flex items-center justify-end gap-2 mb-2">
+        <div className="h-[400px] p-3">
+          <div className="flex items-center justify-end gap-2 mb-3">
             <button
               onClick={() => setViewMode('fit')}
-              className={`px-2 py-1 text-xs rounded border transition-colors ${
+              className={`px-3 py-1.5 text-xs font-sans rounded border transition-colors ${
                 viewMode === 'fit'
-                  ? 'bg-orange-500/20 text-orange-400 border-orange-500/50'
-                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'
+                  ? 'bg-[var(--accent)] text-[var(--paper)] border-[var(--accent)]'
+                  : 'bg-transparent text-[var(--muted)] border-[var(--border)] hover:bg-[var(--accent-light)]'
               }`}
             >
               Fit
             </button>
             <button
               onClick={() => setViewMode('1:1')}
-              className={`px-2 py-1 text-xs rounded border transition-colors ${
+              className={`px-3 py-1.5 text-xs font-sans rounded border transition-colors ${
                 viewMode === '1:1'
-                  ? 'bg-orange-500/20 text-orange-400 border-orange-500/50'
-                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'
+                  ? 'bg-[var(--accent)] text-[var(--paper)] border-[var(--accent)]'
+                  : 'bg-transparent text-[var(--muted)] border-[var(--border)] hover:bg-[var(--accent-light)]'
               }`}
             >
               1:1
             </button>
           </div>
           <div 
-            className="h-full bg-black rounded border border-gray-800 relative overflow-hidden"
+            className="h-full bg-white rounded border border-[var(--border)] relative overflow-hidden shadow-sm"
           >
             <div
               className="w-full h-full"
@@ -946,10 +962,10 @@ function FileUpload({ onFileSelect, onLoadSample, hasImage = false }: FileUpload
   };
 
   return (
-    <div className="space-y-4">
-      {/* Upload area */}
+    <div className="space-y-3">
+      {/* Upload area - subtle drag/drop zone */}
       <div
-        className="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center hover:border-orange-500 transition-colors"
+        className="border border-dashed border-[var(--border)] rounded p-8 text-center hover:border-[var(--muted)] transition-colors bg-[var(--paper-2)]"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragOver}
@@ -962,22 +978,22 @@ function FileUpload({ onFileSelect, onLoadSample, hasImage = false }: FileUpload
           className="hidden"
         />
         <div className="flex flex-col items-center gap-4">
-          <p className="text-gray-400">
+          <p className="text-[var(--muted)] font-sans text-sm">
             {hasImage ? 'Drag a new image here to replace' : 'Drag an image here to upload'}
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
+          <div className="flex items-center gap-3">
             <button
               onClick={handleUploadClick}
-              className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg transition-colors"
+              className="px-5 py-2 bg-[var(--accent)] hover:bg-[var(--ink)] text-[var(--paper)] font-sans font-medium rounded transition-colors text-sm"
             >
-              {hasImage ? 'Upload New Image' : 'Upload Image'}
+              Upload image
             </button>
             {onLoadSample && (
               <button
                 onClick={onLoadSample}
-                className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+                className="px-3 py-2 text-[var(--muted)] hover:text-[var(--ink)] font-sans text-sm transition-colors underline-offset-2 hover:underline"
               >
-                {hasImage ? 'Load Sample Image' : 'Use Sample Image'}
+                Use sample
               </button>
             )}
           </div>

@@ -16,6 +16,7 @@ interface BlueprintCanvasProps {
   originalImageUrl: string | null;
   highlightColor: [number, number, number] | null;
   highlightThreshold: number;
+  viewMode?: 'fit' | '1:1';
 }
 
 export function BlueprintCanvas({
@@ -23,6 +24,7 @@ export function BlueprintCanvas({
   originalImageUrl,
   highlightColor,
   highlightThreshold,
+  viewMode = 'fit',
 }: BlueprintCanvasProps) {
   const previousTextureRef = useRef<THREE.Texture | null>(null);
 
@@ -101,7 +103,7 @@ export function BlueprintCanvas({
             enableZoom={true}
             enablePan={true}
             enableRotate={false}
-            minDistance={2}
+            minDistance={viewMode === '1:1' ? 3 : 2}
             maxDistance={20}
             zoomSpeed={0.8}
           />

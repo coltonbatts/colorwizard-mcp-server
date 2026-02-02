@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* Design tokens - Editorial modernism paper aesthetic */
+:root {
+  --paper: #F6F1E7;
+  --paper-2: #F9F6F0;
+  --ink: #1A1A1A;
+  --muted: #6B6B6B;
+  --border: #D4D0C8;
+  --accent: #2C2C2C;
+  --accent-light: #E8E4DC;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -7,28 +18,30 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--paper);
+  color: var(--ink);
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - paper aesthetic */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: var(--paper-2);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #444;
+  background: var(--border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--muted);
 }
