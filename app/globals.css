@@ -1,15 +1,31 @@
 @import "tailwindcss";
 
-/* Design tokens - Editorial modernism paper aesthetic */
+/* Design tokens - Dark Witchy Aesthetic */
 :root {
-  --paper: #F5F2ED;
-  --paper-2: #FAF8F5;
-  --ink: #121212;
-  --muted: #767676;
-  --border: #D1CDBC;
-  --accent: #000000;
-  --accent-light: #ECEAE0;
-  --grid-color: rgba(0, 0, 0, 0.03);
+  --bg-dark: #13101c;
+  --bg-darker: #0a0810;
+  --glass: rgba(255, 255, 255, 0.03);
+  --glass-hover: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  
+  --pastel-purple: #9b87b3;
+  --pastel-pink: #d4a5c3;
+  --pastel-cyan: #8fb3b3;
+  --pastel-mint: #a1c9be;
+  --warning: #d4a574;
+  
+  --text-primary: #e8e4ed;
+  --text-secondary: #b8b1c5;
+  --text-muted: #716b7e;
+  
+  --glow-purple: rgba(155, 135, 179, 0.2);
+  --glow-pink: rgba(212, 165, 195, 0.2);
+  --glow-cyan: rgba(143, 179, 179, 0.2);
+  
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
 }
 
 * {
@@ -24,48 +40,181 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--paper);
-  color: var(--ink);
-  background-image: 
-    linear-gradient(var(--grid-color) 1px, transparent 1px),
-    linear-gradient(90号, var(--grid-color) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background: radial-gradient(ellipse at top, #1a1523 0%, #13101c 50%, #0a0810 100%);
+  color: var(--text-primary);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
 }
 
-/* Texture overlay for paper feel */
-.paper-texture::after {
-  content: "";
+/* Subtle animated gradient overlay */
+body::before {
+  content: '';
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.04;
-  z-index: 9999;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(155, 135, 179, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(212, 165, 195, 0.06) 0%, transparent 50%);
   pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  z-index: 0;
 }
 
-/* Hairline rules for Swiss design */
-.hairline-b { border-bottom: 0.5px solid var(--border); }
-.hairline-t { border-top: 0.5px solid var(--border); }
-.hairline-l { border-left: 0.5px solid var(--border); }
-.hairline-r { border-right: 0.5px solid var(--border); }
+/* Subtle animations - kept minimal */
+@keyframes pulse-subtle {
+  0%, 100% { 
+    opacity: 0.8;
+  }
+  50% { 
+    opacity: 1;
+  }
+}
 
-/* Custom scrollbar - paper aesthetic */
+/* Remove texture overlay - cleaner modern look */
+.paper-texture::after {
+  display: none;
+}
+
+/* Softer borders */
+.hairline-b { border-bottom: 1px solid var(--border); }
+.hairline-t { border-top: 1px solid var(--border); }
+.hairline-l { border-left: 1px solid var(--border); }
+.hairline-r { border-right: 1px solid var(--border); }
+
+/* Glassomorphism utility classes */
+.glass-card {
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-card:hover {
+  background: var(--glass-hover);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Custom scrollbar - dark glass theme */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--paper);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: rgba(184, 166, 217, 0.3);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--muted);
+  background: rgba(184, 166, 217, 0.5);
+  background-clip: padding-box;
+}
+
+/* Focus styles for better accessibility */
+*:focus-visible {
+  outline: 2px solid var(--pastel-purple);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--pastel-purple);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for interactive elements */
+button, a, input[type="range"], input[type="checkbox"] {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Better range input styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  height: 8px;
+  border-radius: 4px;
+}
+
+input[type="range"]::-webkit-slider-track {
+  background: transparent;
+  height: 8px;
+  border-radius: 4px;
+}
+
+input[type="range"]::-moz-range-track {
+  background: transparent;
+  height: 8px;
+  border: none;
+  border-radius: 4px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 24px;
+  width: 24px;
+  background: white;
+  cursor: pointer;
+  border-radius: 12px;
+  border: 3px solid var(--pastel-purple);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+  margin-top: -8px;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 24px;
+  width: 24px;
+  background: white;
+  cursor: pointer;
+  border: 3px solid var(--pastel-purple);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Minimum tap target sizes for mobile accessibility */
+@media (max-width: 768px) {
+  button,
+  a,
+  input[type="checkbox"],
+  input[type="range"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Responsive text sizing */
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+  
+  h1 {
+    font-size: 2rem;
+  }
+  
+  h2, h3 {
+    font-size: 1.25rem;
+  }
 }

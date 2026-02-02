@@ -23,135 +23,171 @@ export function BlueprintControls() {
   }, []);
 
   return (
-    <div className="p-8 bg-[var(--paper-2)] border border-[var(--border)] relative overflow-hidden">
-      <div className="absolute top-0 right-0 p-2 opacity-5">
-        <span className="text-4xl font-serif font-bold italic select-none">Artistic Control</span>
+    <div className="p-16 lg:p-20 glass-card rounded-xl border-2 border-white/20">
+      <div className="mb-20 text-center">
+        <h3 className="text-3xl font-serif font-normal text-[var(--text-primary)] mb-4">Fine-Tune Settings</h3>
+        <p className="text-base text-[var(--text-muted)]">Adjust these settings to perfect your pattern.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+      <div className="">
         {/* Simplification */}
-        <div className="space-y-4">
-          <div className="flex items-baseline justify-between overflow-hidden">
-            <label className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em] whitespace-nowrap">
-              Simplification
+        <div className="space-y-8 p-12 glass-card rounded-2xl border-2 border-white/30">
+          <div className="flex items-center justify-between mb-6">
+            <label className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+              Detail Level
             </label>
-            <div className="h-[1px] bg-[var(--border)] flex-grow mx-4 opacity-50" />
-            <span className="text-lg font-serif italic tabular-nums">{params.simplification}%</span>
+            <span className="text-3xl font-light text-[var(--text-primary)] tabular-nums">{params.simplification}%</span>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={params.simplification}
-            onChange={(e) => updateParams({ simplification: parseInt(e.target.value) })}
-            className="w-full h-[1px] bg-[var(--border)] appearance-none cursor-pointer accent-[var(--accent)]"
-          />
-          <p className="text-[9px] text-[var(--muted)] font-sans uppercase tracking-widest opacity-70">
-            Merges similar regions for broad artistic shapes
+          <div className="py-6">
+            <div className="relative h-6">
+              <div className="absolute inset-0 h-6 bg-white/30 rounded-full border border-white/40"></div>
+              <div 
+                className="absolute inset-0 h-6 bg-[var(--pastel-purple)] rounded-full transition-all border border-[var(--pastel-purple)]"
+                style={{ width: `${params.simplification}%` }}
+              ></div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={params.simplification}
+                onChange={(e) => updateParams({ simplification: parseInt(e.target.value) })}
+                className="relative w-full h-6 bg-transparent appearance-none cursor-pointer focus:outline-none focus:ring-4 focus:ring-[var(--pastel-purple)]/50 z-10 rounded-full"
+              />
+            </div>
+          </div>
+          <p className="text-sm text-[var(--text-muted)] text-center leading-relaxed mt-6">
+            Higher values create simpler shapes.
           </p>
         </div>
+
+        {/* SPACER */}
+        <div style={{ height: '80px' }}></div>
 
         {/* Smoothing */}
-        <div className="space-y-4">
-          <div className="flex items-baseline justify-between overflow-hidden">
-            <label className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em] whitespace-nowrap">
-              Smoothing
+        <div className="space-y-8 p-12 glass-card rounded-2xl border-2 border-white/30">
+          <div className="flex items-center justify-between mb-6">
+            <label className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+              Smoothness
             </label>
-            <div className="h-[1px] bg-[var(--border)] flex-grow mx-4 opacity-50" />
-            <span className="text-lg font-serif italic tabular-nums">{params.smoothing}%</span>
+            <span className="text-3xl font-light text-[var(--text-primary)] tabular-nums">{params.smoothing}%</span>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={params.smoothing}
-            onChange={(e) => updateParams({ smoothing: parseInt(e.target.value) })}
-            className="w-full h-[1px] bg-[var(--border)] appearance-none cursor-pointer accent-[var(--accent)]"
-          />
-          <p className="text-[9px] text-[var(--muted)] font-sans uppercase tracking-widest opacity-70">
-            Removes digital grain and compression artifacts
+          <div className="py-6">
+            <div className="relative h-6">
+              <div className="absolute inset-0 h-6 bg-white/30 rounded-full border border-white/40"></div>
+              <div 
+                className="absolute inset-0 h-6 bg-[var(--pastel-purple)] rounded-full transition-all border border-[var(--pastel-purple)]"
+                style={{ width: `${params.smoothing}%` }}
+              ></div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={params.smoothing}
+                onChange={(e) => updateParams({ smoothing: parseInt(e.target.value) })}
+                className="relative w-full h-6 bg-transparent appearance-none cursor-pointer focus:outline-none focus:ring-4 focus:ring-[var(--pastel-purple)]/50 z-10 rounded-full"
+              />
+            </div>
+          </div>
+          <p className="text-sm text-[var(--text-muted)] text-center leading-relaxed mt-6">
+            Reduce noise and smooth edges.
           </p>
         </div>
+
+        {/* SPACER */}
+        <div style={{ height: '80px' }}></div>
 
         {/* Min Region Size */}
-        <div className="space-y-4">
-          <div className="flex items-baseline justify-between overflow-hidden">
-            <label className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em] whitespace-nowrap">
-              Min Region
+        <div className="space-y-8 p-12 glass-card rounded-2xl border-2 border-white/30">
+          <div className="flex items-center justify-between mb-6">
+            <label className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+              Minimum Size
             </label>
-            <div className="h-[1px] bg-[var(--border)] flex-grow mx-4 opacity-50" />
-            <span className="text-lg font-serif italic tabular-nums">{params.minRegionSize}px</span>
+            <span className="text-3xl font-light text-[var(--text-primary)] tabular-nums">{params.minRegionSize}<span className="text-lg text-[var(--text-muted)] ml-2">px</span></span>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="1000"
-            step="10"
-            value={params.minRegionSize}
-            onChange={(e) => updateParams({ minRegionSize: parseInt(e.target.value) })}
-            className="w-full h-[1px] bg-[var(--border)] appearance-none cursor-pointer accent-[var(--accent)]"
-          />
-          <p className="text-[9px] text-[var(--muted)] font-sans uppercase tracking-widest opacity-70">
-            Eliminates small speckles for cleaner stitch paths
+          <div className="py-6">
+            <div className="relative h-6">
+              <div className="absolute inset-0 h-6 bg-white/30 rounded-full border border-white/40"></div>
+              <div 
+                className="absolute inset-0 h-6 bg-[var(--pastel-purple)] rounded-full transition-all border border-[var(--pastel-purple)]"
+                style={{ width: `${(params.minRegionSize/1000)*100}%` }}
+              ></div>
+              <input
+                type="range"
+                min="0"
+                max="1000"
+                step="10"
+                value={params.minRegionSize}
+                onChange={(e) => updateParams({ minRegionSize: parseInt(e.target.value) })}
+                className="relative w-full h-6 bg-transparent appearance-none cursor-pointer focus:outline-none focus:ring-4 focus:ring-[var(--pastel-purple)]/50 z-10 rounded-full"
+              />
+            </div>
+          </div>
+          <p className="text-sm text-[var(--text-muted)] text-center leading-relaxed mt-6">
+            Remove tiny spots.
           </p>
         </div>
 
+        {/* SPACER */}
+        <div style={{ height: '80px' }}></div>
+
         {/* Tone Priority */}
-        <div className="space-y-4">
-          <div className="flex items-baseline justify-between overflow-hidden">
-            <label className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em] whitespace-nowrap">
-              Tone Priority
+        <div className="space-y-8 p-12 glass-card rounded-2xl border-2 border-white/30">
+          <div className="flex items-center justify-between mb-6">
+            <label className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+              Brightness Focus
             </label>
-            <div className="h-[1px] bg-[var(--border)] flex-grow mx-4 opacity-50" />
-            <span className="text-lg font-serif italic tabular-nums">{params.toneWeight}%</span>
+            <span className="text-3xl font-light text-[var(--text-primary)] tabular-nums">{params.toneWeight}%</span>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={params.toneWeight}
-            onChange={(e) => updateParams({ toneWeight: parseInt(e.target.value) })}
-            className="w-full h-[1px] bg-[var(--border)] appearance-none cursor-pointer accent-[var(--accent)]"
-          />
-          <p className="text-[9px] text-[var(--muted)] font-sans uppercase tracking-widest opacity-70">
-            Balances color accuracy against tonal structure
+          <div className="py-6">
+            <div className="relative h-6">
+              <div className="absolute inset-0 h-6 bg-white/30 rounded-full border border-white/40"></div>
+              <div 
+                className="absolute inset-0 h-6 bg-[var(--pastel-purple)] rounded-full transition-all border border-[var(--pastel-purple)]"
+                style={{ width: `${params.toneWeight}%` }}
+              ></div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={params.toneWeight}
+                onChange={(e) => updateParams({ toneWeight: parseInt(e.target.value) })}
+                className="relative w-full h-6 bg-transparent appearance-none cursor-pointer focus:outline-none focus:ring-4 focus:ring-[var(--pastel-purple)]/50 z-10 rounded-full"
+              />
+            </div>
+          </div>
+          <p className="text-sm text-[var(--text-muted)] text-center leading-relaxed mt-6">
+            Balance hue and brightness.
           </p>
         </div>
       </div>
 
-      <div className="mt-12 pt-6 border-t border-[var(--border)] flex flex-wrap gap-x-8 gap-y-4">
+      <div className="mt-16 pt-12 border-t-2 border-white/20 flex flex-wrap justify-center gap-8">
         {isMounted && (
           <>
-            <label className="flex items-center gap-2 cursor-pointer group">
+            <label className="flex items-center gap-4 cursor-pointer px-8 py-4 glass-card hover:bg-white/10 rounded-xl transition-all border-2 border-white/20">
               <input
                 type="checkbox"
                 checked={highQualityPreview}
                 onChange={(e) => setHighQualityPreview(e.target.checked)}
-                className="w-3 h-3 border-[var(--border)] text-[var(--accent)] rounded-none focus:ring-0"
+                className="w-5 h-5 text-[var(--pastel-purple)] rounded focus:ring-2 focus:ring-[var(--pastel-purple)]/30 bg-white/5 border-white/20"
               />
-              <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-[var(--muted)] group-hover:text-[var(--ink)] transition-colors">
-                High Density Spec
+              <span className="text-base font-semibold text-[var(--text-primary)]">
+                High Quality
               </span>
             </label>
 
-            <label className="flex items-center gap-2 cursor-pointer group">
+            <label className="flex items-center gap-4 cursor-pointer px-8 py-4 glass-card hover:bg-white/10 rounded-xl transition-all border-2 border-white/20">
               <input
                 type="checkbox"
                 checked={mockMode}
                 onChange={(e) => setMockMode(e.target.checked)}
-                className="w-3 h-3 border-[var(--border)] text-[var(--accent)] rounded-none focus:ring-0"
+                className="w-5 h-5 text-[var(--pastel-cyan)] rounded focus:ring-2 focus:ring-[var(--pastel-cyan)]/30 bg-white/5 border-white/20"
               />
-              <span className="text-[10px] font-sans font-bold uppercase tracking-widest text-[var(--muted)] group-hover:text-[var(--ink)] transition-colors">
-                Sandbox Mode
+              <span className="text-base font-semibold text-[var(--text-primary)]">
+                Demo Mode
               </span>
             </label>
           </>
-        )}
-
-        {loading && (
-          <div className="flex-grow flex justify-end">
-            <StatusIndicator />
-          </div>
         )}
       </div>
     </div>
@@ -166,24 +202,24 @@ function StatusIndicator() {
 
   if (error) {
     return (
-      <div className="text-sm text-red-700 font-sans">
-        <span className="font-semibold">Error:</span> {error}
+      <div className="text-xs text-red-700 font-sans">
+        <span className="font-medium uppercase tracking-wide">Error:</span> {error}
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="text-sm text-[var(--muted)] font-sans">
-        <span className="font-semibold">Status:</span>{' '}
-        {statusMessage || (mode === 'fast' ? 'Fast preview...' : 'Final preview...')}
+      <div className="text-xs text-[var(--muted)] font-sans">
+        <span className="font-medium uppercase tracking-wide">Status:</span>{' '}
+        {statusMessage || (mode === 'fast' ? 'Processing' : 'Finalizing')}
       </div>
     );
   }
 
   return (
-    <div className="text-sm text-[var(--muted)] font-sans">
-      <span className="font-semibold">Status:</span> Ready
+    <div className="text-xs text-[var(--muted)] font-sans">
+      <span className="font-medium uppercase tracking-wide">Status:</span> Ready
     </div>
   );
 }

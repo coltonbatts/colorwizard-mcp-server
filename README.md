@@ -841,7 +841,7 @@ npm run demo:start
 
 ## ThreeJS Live Blueprint UI
 
-A production-grade Next.js UI with Three.js for realtime blueprint preview and interaction.
+A production-grade Next.js UI with Three.js for realtime blueprint preview and interaction, featuring a dark witchy aesthetic with elegant typography and generous spacing.
 
 ### Running the ThreeJS UI
 
@@ -888,6 +888,19 @@ npm run next:start
 - **Color Highlighting**: Click palette swatches to highlight that color in the preview
 - **Mobile-Friendly**: Touch-safe controls and responsive layout
 - **Debounced Controls**: Smooth interaction without flickering
+- **Dark Witchy Aesthetic**: Moody color palette with glassomorphism effects
+- **Generous Spacing**: Clean layout with proper breathing room between all UI elements
+- **Visible Controls**: High-contrast sliders with clear visual feedback
+
+### Design System
+
+The UI features a cohesive dark aesthetic with:
+
+- **Color Palette**: Darker, moodier tones (`#13101c` background, muted purples `#9b87b3`)
+- **Typography**: Editorial serif headings with clean sans-serif UI labels
+- **Spacing System**: Consistent 80-120px gaps between major sections
+- **Glass Effects**: Subtle backdrop blur with minimal borders
+- **Interactive Feedback**: Clear hover states and focus rings for accessibility
 
 ### Architecture
 

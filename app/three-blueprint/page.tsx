@@ -141,95 +141,6 @@ export default function ThreeBlueprintPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mockMode]); // Only re-run when mockMode changes
 
-  // Handle file upload
-  const handleFileUpload = useCallback(async (file: File) => {
-    // Clean up previous state
-    if (fastAbortControllerRef.current) {
-      fastAbortControllerRef.current.abort();
-      fastAbortControllerRef.current = null;
-    }
-    if (finalAbortControllerRef.current) {
-      finalAbortControllerRef.current.abort();
-      finalAbortControllerRef.current = null;
-    }
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-    if (finalPreviewTimerRef.current) {
-      clearTimeout(finalPreviewTimerRef.current);
-      finalPreviewTimerRef.current = null;
-    }
-
-    // OBJECT URL SAFETY: Revoke previous blob URL before creating new one
-    const previousUrl = originalPreviewUrl;
-    if (previousUrl && previousUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(previousUrl);
-    }
-
-    setError(null);
-    setLastResponse(null);
-    setImageId(null);
-    setOriginalPreviewUrl(null);
-
-    // Create object URL for immediate preview
-    // This will be cleaned up by the useEffect cleanup when originalPreviewUrl changes
-    const objectUrl = URL.createObjectURL(file);
-    setOriginalPreviewUrl(objectUrl);
-
-    // Read file as base64
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const base64 = e.target?.result as string;
-      if (!base64) return;
-
-      try {
-        setLoading(true);
-        setStatusMessage('Registering image...');
-
-        // Register image (use smaller size for faster registration)
-        // We'll resize again during blueprint generation anyway
-        const registerResult = await registerImage({
-          imageBase64: base64,
-          maxSize: 1024, // Smaller size for faster registration
-        }).catch((err) => {
-          // Provide helpful error message
-          if (err.message.includes('timeout') || err.message.includes('Cannot reach')) {
-            throw new Error(
-              `Cannot connect to demo server. ` +
-              `Please run: npm run demo (in a separate terminal), ` +
-              `or enable Mock Mode in Advanced Options for faster testing.`
-            );
-          }
-          throw err;
-        });
-
-        if (!registerResult.ok || !registerResult.imageId) {
-          throw new Error(registerResult.error || 'Failed to register image');
-        }
-
-        setImageId(registerResult.imageId);
-        setLoading(false);
-        setStatusMessage(null);
-
-        // Auto-trigger FAST request at default 18 colors for instant output
-        // Small delay to ensure state is updated
-        setTimeout(() => {
-          triggerPreview(true);
-        }, 50);
-      } catch (err) {
-        // OBJECT URL SAFETY: Revoke object URL on error
-        if (objectUrl && objectUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(objectUrl);
-        }
-        setError(err instanceof Error ? err.message : 'Failed to register image');
-        setLoading(false);
-        setStatusMessage(null);
-      }
-    };
-    reader.readAsDataURL(file);
-  }, [setImageId, setOriginalPreviewUrl, setError, setLoading, setStatusMessage, setLastResponse, originalPreviewUrl]);
-
   // Generate preview with caching and cancellation
   // Uses separate abort controllers for fast vs final to prevent starvation
   const generatePreview = useCallback(
@@ -439,6 +350,7 @@ export default function ThreeBlueprintPage() {
       setLastResponse,
       cacheResponse,
       getCachedResponse,
+      originalPreviewUrl,
     ]
   );
 
@@ -466,6 +378,95 @@ export default function ThreeBlueprintPage() {
     },
     [imageId, generatePreview, getFinalMaxSize]
   );
+
+  // Handle file upload
+  const handleFileUpload = useCallback(async (file: File) => {
+    // Clean up previous state
+    if (fastAbortControllerRef.current) {
+      fastAbortControllerRef.current.abort();
+      fastAbortControllerRef.current = null;
+    }
+    if (finalAbortControllerRef.current) {
+      finalAbortControllerRef.current.abort();
+      finalAbortControllerRef.current = null;
+    }
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (finalPreviewTimerRef.current) {
+      clearTimeout(finalPreviewTimerRef.current);
+      finalPreviewTimerRef.current = null;
+    }
+
+    // OBJECT URL SAFETY: Revoke previous blob URL before creating new one
+    const previousUrl = originalPreviewUrl;
+    if (previousUrl && previousUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previousUrl);
+    }
+
+    setError(null);
+    setLastResponse(null);
+    setImageId(null);
+    setOriginalPreviewUrl(null);
+
+    // Create object URL for immediate preview
+    // This will be cleaned up by the useEffect cleanup when originalPreviewUrl changes
+    const objectUrl = URL.createObjectURL(file);
+    setOriginalPreviewUrl(objectUrl);
+
+    // Read file as base64
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target?.result as string;
+      if (!base64) return;
+
+      try {
+        setLoading(true);
+        setStatusMessage('Registering image...');
+
+        // Register image (use smaller size for faster registration)
+        // We'll resize again during blueprint generation anyway
+        const registerResult = await registerImage({
+          imageBase64: base64,
+          maxSize: 1024, // Smaller size for faster registration
+        }).catch((err) => {
+          // Provide helpful error message
+          if (err.message.includes('timeout') || err.message.includes('Cannot reach')) {
+            throw new Error(
+              `Cannot connect to demo server. ` +
+              `Please run: npm run demo (in a separate terminal), ` +
+              `or enable Mock Mode in Advanced Options for faster testing.`
+            );
+          }
+          throw err;
+        });
+
+        if (!registerResult.ok || !registerResult.imageId) {
+          throw new Error(registerResult.error || 'Failed to register image');
+        }
+
+        setImageId(registerResult.imageId);
+        setLoading(false);
+        setStatusMessage(null);
+
+        // Auto-trigger FAST request at default 18 colors for instant output
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          triggerPreview(true);
+        }, 50);
+      } catch (err) {
+        // OBJECT URL SAFETY: Revoke object URL on error
+        if (objectUrl && objectUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(objectUrl);
+        }
+        setError(err instanceof Error ? err.message : 'Failed to register image');
+        setLoading(false);
+        setStatusMessage(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  }, [setImageId, setOriginalPreviewUrl, setError, setLoading, setStatusMessage, setLastResponse, originalPreviewUrl, triggerPreview]);
 
   // Load sample image
   const loadSampleImage = useCallback(async () => {
@@ -596,91 +597,89 @@ export default function ThreeBlueprintPage() {
   const hasDmcData = palette.some(c => c.dmcMatch?.ok && c.dmcMatch.best);
 
   return (
-    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] paper-texture selection:bg-[var(--accent)] selection:text-[var(--paper)]">
-      {/* Top Hairline */}
-      <div className="hairline-b bg-[var(--paper-2)]/50 sticky top-0 z-50 backdrop-blur-sm">
-        <div className="container mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-lg font-serif font-medium tracking-tight">Magpie Embroidery</h1>
-            <div className="h-4 w-[1px] bg-[var(--border)]" />
-            <p className="text-[10px] text-[var(--muted)] font-sans uppercase tracking-[0.2em] mt-0.5">Blueprint Specimen 01</p>
-          </div>
-          <div className="flex items-center gap-4">
-            {/* Status Indicators */}
-            <div className="flex items-center gap-2">
-              {isMounted && (
-                <div className={`px-2 py-0.5 rounded-none text-[9px] font-sans font-bold uppercase tracking-widest border ${mockMode ? 'border-amber-500 text-amber-600 bg-amber-50/50' : 'border-[var(--muted)] text-[var(--muted)]'
-                  }`}>
-                  {mockMode ? 'Mock' : 'Live'}
+    <div className="min-h-screen relative" style={{ position: 'relative', zIndex: 1 }}>
+      {/* Header */}
+      <div className="sticky top-0 z-50 backdrop-blur-xl bg-white/5 border-b border-white/10 relative overflow-hidden">
+        <div className="container mx-auto px-6 lg:px-8 py-8 flex flex-col items-center justify-center gap-4 relative z-10">
+          {/* Main Title */}
+          <h1 className="text-4xl lg:text-5xl font-serif font-normal text-center text-[var(--text-primary)] tracking-tight">
+            Magpie Embroidery
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-sm text-[var(--text-secondary)] tracking-[0.2em] uppercase">Pattern Designer</p>
+
+          {/* Status Indicators */}
+          {(imageId && (loading || !loading)) && (
+            <div className="flex items-center gap-3 mt-2">
+              {loading && (
+                <div className="flex items-center gap-2 px-5 py-2 bg-white/5 backdrop-blur-sm rounded-full border border-[var(--pastel-purple)]/20">
+                  <div className="w-1.5 h-1.5 bg-[var(--pastel-purple)] rounded-full animate-pulse"></div>
+                  <span className="text-xs font-medium text-[var(--text-secondary)]">
+                    {mode === 'fast' ? 'Processing' : 'Finalizing'}
+                  </span>
                 </div>
               )}
-              {imageId && (
-                <div className={`px-2 py-0.5 rounded-none text-[9px] font-sans font-bold uppercase tracking-widest border ${loading ? 'border-blue-500 text-blue-600 animate-pulse' : 'border-green-600 text-green-700 bg-green-50/50'
-                  }`}>
-                  {loading ? (mode === 'fast' ? 'Sync' : 'Finalizing') : 'Ready'}
+              {!loading && (
+                <div className="flex items-center gap-2 px-5 py-2 bg-white/5 backdrop-blur-sm rounded-full border border-[var(--pastel-cyan)]/20">
+                  <div className="w-1.5 h-1.5 bg-[var(--pastel-cyan)] rounded-full"></div>
+                  <span className="text-xs font-medium text-[var(--text-secondary)]">Ready</span>
                 </div>
               )}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      <div className="container mx-auto p-6 max-w-7xl pt-10">
-        {/* App Meta Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12 items-baseline">
-          <div className="col-span-1">
-            <h2 className="text-xs font-sans font-bold uppercase tracking-[0.15em] text-[var(--muted)] mb-3">Project Metadata</h2>
-            <div className="space-y-1.5">
-              <div className="flex justify-between hairline-b pb-1.5">
-                <span className="text-[10px] font-sans text-[var(--muted)] uppercase tracking-wider">Indexed Colors</span>
-                <span className="text-xs font-sans font-medium">{palette.length || params.paletteSize}</span>
+      <div className="container mx-auto p-6 lg:p-8 max-w-7xl pt-12 lg:pt-16">
+        {/* Project Stats - Only show when image is loaded */}
+        {imageId && (
+          <div style={{ marginBottom: '100px' }}>
+            <div className="flex flex-col sm:flex-row items-center justify-center" style={{ gap: '60px' }}>
+              <div className="glass-card rounded-2xl px-16 py-10 border-2 border-white/30 hover:border-[var(--pastel-purple)]/40 transition-all text-center min-w-[180px]">
+                <div className="text-[10px] text-[var(--text-secondary)] mb-3 uppercase tracking-widest font-bold">Colors</div>
+                <div className="text-5xl font-light text-[var(--text-primary)] tabular-nums">{palette.length || params.paletteSize}</div>
               </div>
               {hasDmcData && (
-                <div className="flex justify-between hairline-b pb-1.5">
-                  <span className="text-[10px] font-sans text-[var(--muted)] uppercase tracking-wider">Thread Manifest</span>
-                  <span className="text-xs font-sans font-medium">{totalThreads} Units</span>
+                <div className="glass-card rounded-2xl px-16 py-10 border-2 border-white/30 hover:border-[var(--pastel-cyan)]/40 transition-all text-center min-w-[180px]">
+                  <div className="text-[10px] text-[var(--text-secondary)] mb-3 uppercase tracking-widest font-bold">Thread Colors</div>
+                  <div className="text-5xl font-light text-[var(--text-primary)] tabular-nums">{totalThreads}</div>
                 </div>
               )}
-              <div className="flex justify-between hairline-b pb-1.5">
-                <span className="text-[10px] font-sans text-[var(--muted)] uppercase tracking-wider">Engine Status</span>
-                <span className="text-xs font-sans font-medium uppercase tracking-tighter">Optimized-R2</span>
-              </div>
             </div>
           </div>
-          <div className="col-span-1 md:col-span-2">
-            {isMounted && !mockMode && (
-              <div className="h-full flex flex-col justify-end">
-                <span className="text-[9px] text-[var(--muted)] font-mono opacity-40 uppercase tracking-widest">
-                  Endpoint: {getDemoOrigin()}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Error with switch to mock mode button */}
         {isMounted && error && !mockMode && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="text-red-800 font-sans font-semibold mb-1">API Connection Error</p>
-                <p className="text-red-700 text-sm font-sans">{error}</p>
+          <div className="mb-16 p-8 glass-card rounded-xl border border-[var(--warning)]/20 relative overflow-hidden">
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-start gap-6">
+              <div className="flex-shrink-0">
+                <div className="w-12 h-12 glass-card rounded-lg flex items-center justify-center border border-[var(--warning)]/20">
+                  <svg className="w-6 h-6 text-[var(--warning)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
               </div>
-              <button
-                onClick={() => {
-                  setMockMode(true);
-                  setError(null);
-                }}
-                className="ml-4 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--ink)] text-[var(--paper)] font-sans font-medium rounded transition-colors whitespace-nowrap text-sm"
-              >
-                Switch to Mock Mode
-              </button>
+              <div className="flex-1">
+                <h3 className="text-lg font-serif font-normal text-[var(--text-primary)] mb-3">Connection Problem</h3>
+                <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-6">{error}</p>
+                <button
+                  onClick={() => {
+                    setMockMode(true);
+                    setError(null);
+                  }}
+                  className="px-6 py-3 bg-[var(--pastel-purple)] hover:bg-[var(--pastel-purple)]/80 text-white font-medium text-sm rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-[var(--pastel-purple)]/30 focus:ring-offset-2 focus:ring-offset-[var(--bg-dark)]"
+                >
+                  Try Demo Mode
+                </button>
+              </div>
             </div>
           </div>
         )}
 
         {/* File upload / Image selection */}
-        <div className="mb-6">
+        <div style={{ marginBottom: '120px' }}>
           <FileUpload
             onFileSelect={handleFileUpload}
             onLoadSample={loadSampleImage}
@@ -690,14 +689,14 @@ export default function ThreeBlueprintPage() {
 
         {/* Primary Control: Colors Used slider */}
         {imageId && (
-          <div className="mb-6">
+          <div style={{ marginBottom: '120px' }}>
             <ColorsUsedControl />
           </div>
         )}
 
         {/* Main layout - Desktop: Output + Thread List side by side, Mobile: stacked */}
         {imageId ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" style={{ marginBottom: '120px' }}>
             {/* Desktop: Blueprint Output (75%) + Thread List (25%) */}
             {/* Mobile: Blueprint Output full width, then Thread List full width */}
             <div className="lg:col-span-9 order-1">
@@ -715,7 +714,7 @@ export default function ThreeBlueprintPage() {
             </div>
           </div>
         ) : (
-          <div className="mb-4">
+          <div style={{ marginBottom: '120px' }}>
             <BlueprintOutputPanel
               previewBase64={previewBase64}
               highlightColor={highlightColor}
@@ -729,13 +728,13 @@ export default function ThreeBlueprintPage() {
 
         {/* Reference Image - Collapsible, secondary */}
         {imageId && (
-          <div className="mb-4">
+          <div style={{ marginBottom: '120px' }}>
             <ReferenceImagePanel originalPreviewUrl={originalPreviewUrl} highlightThreshold={highlightThreshold} />
           </div>
         )}
 
         {/* Controls - Advanced options in accordion */}
-        <div className="mb-4">
+        <div style={{ marginBottom: '120px' }}>
           <BlueprintControls />
         </div>
       </div>
@@ -750,69 +749,58 @@ function ColorsUsedControl({ }: ColorsUsedControlProps) {
   const updateParams = useBlueprintStore((state) => state.updateParams);
 
   return (
-    <div className="p-8 bg-[var(--paper-2)] border border-[var(--border)] relative overflow-hidden">
-      <div className="absolute top-0 right-0 p-2 opacity-5">
-        <span className="text-4xl font-serif font-bold italic select-none">Quantity</span>
-      </div>
-      <div className="flex items-baseline justify-between mb-8">
-        <div>
-          <label className="block text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em] mb-1">
-            Complexity Gradient
+    <div className="p-16 lg:p-20 glass-card rounded-2xl border-2 border-white/30">
+      <div className="text-center">
+        {/* Title */}
+        <div className="mb-10">
+          <label className="text-2xl font-serif font-normal text-[var(--text-primary)] block mb-4">
+            Number of Colors
           </label>
-          <p className="text-[11px] text-[var(--muted)] font-sans italic">
-            Adjusting color density for optimal stitch resolution
+          <p className="text-sm text-[var(--text-muted)]">
+            Choose how many thread colors to use in your pattern.
           </p>
         </div>
-        <span className="text-4xl font-serif font-medium tracking-tighter tabular-nums underline decoration-[0.5px] underline-offset-8 decoration-[var(--border)]">
-          {params.paletteSize}
-        </span>
-      </div>
-      <div className="relative h-12 flex items-center">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full h-[1px] bg-[var(--border)]" />
+        
+        {/* Big number */}
+        <div className="my-12">
+          <span className="text-7xl font-light text-[var(--text-primary)] tabular-nums">
+            {params.paletteSize}
+          </span>
         </div>
-        <input
-          type="range"
-          min="2"
-          max="40"
-          value={params.paletteSize}
-          onChange={(e) => {
-            const value = parseInt(e.target.value, 10);
-            const clampedValue = Math.max(2, Math.min(40, value));
-            if (!isNaN(clampedValue)) {
-              updateParams({ paletteSize: clampedValue });
-            }
-          }}
-          className="relative w-full h-8 bg-transparent appearance-none cursor-pointer z-10 transition-all active:scale-[0.99]"
-          style={{
-            WebkitAppearance: 'none',
-            outline: 'none',
-          }}
-        />
-        {/* Custom thumb style via global CSS or inline if needed, but for now standard range with custom track background is fine */}
-        <style jsx>{`
-          input[type='range']::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 24px;
-            width: 1px;
-            background: var(--accent);
-            cursor: pointer;
-            box-shadow: 0 0 0 6px var(--paper), 0 0 0 7px var(--border);
-          }
-          input[type='range']::-moz-range-thumb {
-            height: 24px;
-            width: 1px;
-            background: var(--accent);
-            cursor: pointer;
-            border: none;
-            border-radius: 0;
-            box-shadow: 0 0 0 6px var(--paper), 0 0 0 7px var(--border);
-          }
-        `}</style>
-      </div>
-      <div className="flex justify-between mt-4">
-        <span className="text-[9px] font-sans text-[var(--muted)] uppercase tracking-widest">Min (02)</span>
-        <span className="text-[9px] font-sans text-[var(--muted)] uppercase tracking-widest text-right">Max (40)</span>
+
+        {/* Slider with visible track */}
+        <div className="py-6 mb-4">
+          <div className="relative h-6">
+            {/* Background track */}
+            <div className="absolute inset-0 h-6 bg-white/30 rounded-full border border-white/40"></div>
+            {/* Filled track */}
+            <div 
+              className="absolute inset-0 h-6 bg-[var(--pastel-purple)] rounded-full transition-all border border-[var(--pastel-purple)]"
+              style={{
+                width: `${((params.paletteSize - 2) / 38) * 100}%`
+              }}
+            ></div>
+            {/* Slider input */}
+            <input
+              type="range"
+              min="2"
+              max="40"
+              value={params.paletteSize}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10);
+                const clampedValue = Math.max(2, Math.min(40, value));
+                if (!isNaN(clampedValue)) {
+                  updateParams({ paletteSize: clampedValue });
+                }
+              }}
+              className="relative w-full h-6 bg-transparent appearance-none cursor-pointer focus:outline-none focus:ring-4 focus:ring-[var(--pastel-purple)]/50 z-10 rounded-full"
+            />
+          </div>
+        </div>
+        <div className="flex justify-between w-full px-2 mt-6">
+          <span className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">2</span>
+          <span className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">40</span>
+        </div>
       </div>
     </div>
   );
@@ -839,44 +827,32 @@ function BlueprintOutputPanel({
 
   return (
     <div className="h-[700px] lg:h-[900px] flex flex-col">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <h3 className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em]">
-            Production View
-          </h3>
-          <div className="px-2 py-0.5 border border-[var(--border)] text-[8px] font-mono text-[var(--muted)] uppercase tracking-tighter">
-            VIEW_MODE_{viewMode.toUpperCase()}
-          </div>
-        </div>
-        <div className="flex items-center gap-[1px] bg-[var(--border)] p-[1px]">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h3 className="text-xl font-serif font-normal text-[var(--text-primary)]">
+          Your Pattern
+        </h3>
+        <div className="flex items-center gap-1 glass-card rounded-lg p-1">
           <button
             onClick={() => setViewMode('fit')}
-            className={`px-4 py-1.5 text-[10px] font-sans uppercase tracking-widest transition-colors ${viewMode === 'fit'
-              ? 'bg-[var(--accent)] text-[var(--paper)]'
-              : 'bg-[var(--paper)] text-[var(--muted)] hover:text-[var(--ink)]'
+            className={`px-5 py-2 text-xs font-medium uppercase tracking-wider rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-[var(--pastel-purple)]/30 ${viewMode === 'fit'
+              ? 'bg-white/10 text-[var(--text-primary)]'
+              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5'
               }`}
           >
-            [ fit ]
+            Fit
           </button>
           <button
             onClick={() => setViewMode('1:1')}
-            className={`px-4 py-1.5 text-[10px] font-sans uppercase tracking-widest transition-colors ${viewMode === '1:1'
-              ? 'bg-[var(--accent)] text-[var(--paper)]'
-              : 'bg-[var(--paper)] text-[var(--muted)] hover:text-[var(--ink)]'
+            className={`px-5 py-2 text-xs font-medium uppercase tracking-wider rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-[var(--pastel-purple)]/30 ${viewMode === '1:1'
+              ? 'bg-white/10 text-[var(--text-primary)]'
+              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5'
               }`}
           >
-            [ 1:1 ]
+            1:1
           </button>
         </div>
       </div>
-      <div className="flex-1 bg-white border border-[var(--border)] relative overflow-hidden group">
-        <div className="absolute top-2 left-2 z-10 pointer-events-none opacity-20 transition-opacity group-hover:opacity-40">
-          <div className="w-12 h-12 border-t border-l border-[var(--ink)]" />
-        </div>
-        <div className="absolute bottom-2 right-2 z-10 pointer-events-none opacity-20 transition-opacity group-hover:opacity-40">
-          <div className="w-12 h-12 border-b border-r border-[var(--ink)]" />
-        </div>
-
+      <div className="flex-1 glass-card rounded-xl border border-white/10 relative overflow-hidden">
         <BlueprintCanvas
           previewBase64={previewBase64}
           originalImageUrl={null}
@@ -885,20 +861,14 @@ function BlueprintOutputPanel({
           viewMode={viewMode}
         />
         {loading && (
-          <div className="absolute inset-0 bg-[var(--paper)]/60 backdrop-blur-[2px] flex flex-col items-center justify-center z-20">
-            <div className="w-24 h-[1px] bg-[var(--border)] mb-4 overflow-hidden">
-              <div className="w-full h-full bg-[var(--accent)] -translate-x-full animate-[loading_1.5s_infinite_ease-in-out]" />
+          <div className="absolute inset-0 backdrop-blur-xl bg-[var(--bg-dark)]/90 flex flex-col items-center justify-center z-20">
+            <div className="w-12 h-12 mb-4 relative">
+              <div className="absolute inset-0 rounded-full border-2 border-white/10"></div>
+              <div className="absolute inset-0 rounded-full border-2 border-t-[var(--pastel-purple)] animate-spin"></div>
             </div>
-            <div className="text-[10px] text-[var(--accent)] font-sans font-bold uppercase tracking-[0.2em]">{statusMessage || 'Processing...'}</div>
+            <div className="text-sm text-[var(--text-secondary)] font-medium">{statusMessage || 'Creating your pattern'}</div>
           </div>
         )}
-        <style jsx>{`
-          @keyframes loading {
-            0% { transform: translateX(-100%); }
-            50% { transform: translateX(0%); }
-            100% { transform: translateX(100%); }
-          }
-        `}</style>
       </div>
     </div>
   );
@@ -916,47 +886,54 @@ function ReferenceImagePanel({ originalPreviewUrl, highlightThreshold }: Referen
   if (!originalPreviewUrl) return null;
 
   return (
-    <div className="bg-[var(--paper-2)] border border-[var(--border)] overflow-hidden">
+    <div className="glass-card rounded-xl overflow-hidden">
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="w-full flex items-center justify-between p-6 text-left hover:bg-[var(--accent-light)] transition-colors"
+        className="w-full flex items-center justify-between p-6 text-left hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--pastel-purple)]/30"
       >
-        <div className="flex items-center gap-4">
-          <h3 className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em]">
-            Reference Plate
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-serif font-normal text-[var(--text-primary)]">
+            Original Image
           </h3>
-          <span className="text-[9px] font-sans text-[var(--muted)] opacity-50 font-mono">
-            REF_SOURCE_01
+          <span className="hidden sm:inline px-3 py-1 glass-card rounded-md text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">
+            Reference
           </span>
         </div>
-        <span className="text-[10px] text-[var(--muted)] font-mono">{isCollapsed ? '[ + ]' : '[ — ]'}</span>
+        <svg 
+          className={`w-5 h-5 text-[var(--text-muted)] transition-transform ${isCollapsed ? '' : 'rotate-180'}`}
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
       {!isCollapsed && (
         <div className="h-[500px] p-6 pt-0">
-          <div className="flex items-center justify-between mb-4 mt-2">
-            <span className="text-[10px] font-sans text-[var(--muted)] italic">Original chromatic data for comparison</span>
-            <div className="flex items-center gap-[1px] bg-[var(--border)] p-[1px]">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm text-[var(--text-muted)]">Compare with your original</span>
+            <div className="flex items-center gap-1 glass-card rounded-lg p-1">
               <button
                 onClick={() => setViewMode('fit')}
-                className={`px-4 py-1.5 text-[10px] font-sans uppercase tracking-widest transition-colors ${viewMode === 'fit'
-                  ? 'bg-[var(--accent)] text-[var(--paper)]'
-                  : 'bg-[var(--paper)] text-[var(--muted)] hover:text-[var(--ink)]'
+                className={`px-5 py-2 text-xs font-medium uppercase tracking-wider rounded-md transition-all focus:outline-none ${viewMode === 'fit'
+                  ? 'bg-white/10 text-[var(--text-primary)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
               >
                 Fit
               </button>
               <button
                 onClick={() => setViewMode('1:1')}
-                className={`px-4 py-1.5 text-[10px] font-sans uppercase tracking-widest transition-colors ${viewMode === '1:1'
-                  ? 'bg-[var(--accent)] text-[var(--paper)]'
-                  : 'bg-[var(--paper)] text-[var(--muted)] hover:text-[var(--ink)]'
+                className={`px-5 py-2 text-xs font-medium uppercase tracking-wider rounded-md transition-all focus:outline-none ${viewMode === '1:1'
+                  ? 'bg-white/10 text-[var(--text-primary)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
               >
                 1:1
               </button>
             </div>
           </div>
-          <div className="h-full bg-white border border-[var(--border)] relative overflow-hidden">
+          <div className="h-full glass-card rounded-xl relative overflow-hidden border border-white/10">
             <div
               className="w-full h-full"
               style={{
@@ -1020,16 +997,11 @@ function FileUpload({ onFileSelect, onLoadSample, hasImage = false }: FileUpload
   return (
     <div className="space-y-4">
       <div
-        className="border border-[var(--border)] p-12 text-center hover:bg-[var(--accent-light)]/30 transition-all cursor-pointer relative overflow-hidden group"
+        className="glass-card border-2 border-dashed border-white/10 rounded-xl p-16 lg:p-20 text-center hover:border-[var(--pastel-purple)]/30 transition-all duration-300 cursor-pointer relative overflow-hidden group"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onClick={handleUploadClick}
       >
-        <div className="absolute top-0 left-0 w-8 h-8 border-t border-l border-[var(--muted)] opacity-20" />
-        <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-[var(--muted)] opacity-20" />
-        <div className="absolute bottom-0 left-0 w-8 h-8 border-b border-l border-[var(--muted)] opacity-20" />
-        <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-[var(--muted)] opacity-20" />
-
         <input
           ref={fileInputRef}
           type="file"
@@ -1037,21 +1009,28 @@ function FileUpload({ onFileSelect, onLoadSample, hasImage = false }: FileUpload
           onChange={handleChange}
           className="hidden"
         />
-        <div className="flex flex-col items-center gap-6 py-4">
-          <div>
-            <span className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.3em] block mb-2">
-              Source Selection
-            </span>
-            <p className="text-xl font-serif text-[var(--ink)]">
-              {hasImage ? 'Replace current specimen' : 'Select an image for analysis'}
+        <div className="relative z-10 flex flex-col items-center gap-8 py-4">
+          {/* Upload Icon */}
+          <div className="w-20 h-20 glass-card rounded-xl flex items-center justify-center transition-all duration-300">
+            <svg className="w-10 h-10 text-[var(--text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-2xl lg:text-3xl font-serif font-normal text-[var(--text-primary)]">
+              {hasImage ? 'Upload a new image' : 'Upload your image'}
+            </h3>
+            <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">
+              Drag and drop your image here, or click to browse.
             </p>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
             <button
-              className="px-8 py-3 bg-[var(--accent)] text-[var(--paper)] font-sans font-bold uppercase tracking-widest text-[10px] transition-transform group-hover:scale-105"
+              className="px-8 py-3 bg-[var(--pastel-purple)] hover:bg-[var(--pastel-purple)]/80 text-white font-medium text-sm rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--pastel-purple)]/50 focus:ring-offset-2 focus:ring-offset-[var(--bg-dark)]"
             >
-              Initialize Upload
+              Choose Image
             </button>
             {onLoadSample && (
               <button
@@ -1059,9 +1038,9 @@ function FileUpload({ onFileSelect, onLoadSample, hasImage = false }: FileUpload
                   e.stopPropagation();
                   onLoadSample();
                 }}
-                className="text-[10px] font-sans font-bold text-[var(--muted)] hover:text-[var(--ink)] uppercase tracking-widest underline underline-offset-4 decoration-[0.5px]"
+                className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors focus:outline-none px-6 py-3 rounded-lg hover:bg-white/5"
               >
-                Use Factory Sample
+                or try a sample
               </button>
             )}
           </div>

@@ -18,13 +18,17 @@ export function PalettePanel() {
 
   if (palette.length === 0) {
     return (
-      <div className="p-8 bg-[var(--paper-2)] border border-[var(--border)] h-full">
-        <h2 className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em] mb-6">
-          Thread Manifest
-        </h2>
-        <div className="space-y-4">
-          <div className="h-[1px] bg-[var(--border)] opacity-30" />
-          <p className="text-[11px] text-[var(--muted)] font-sans italic">Awaiting source image processing...</p>
+      <div className="p-8 glass-card rounded-xl h-full relative overflow-hidden">
+        <div className="relative z-10 flex flex-col items-center text-center h-full justify-center">
+          <div className="w-16 h-16 glass-card rounded-xl flex items-center justify-center mb-6 border border-white/10">
+            <svg className="w-8 h-8 text-[var(--text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-serif font-normal text-[var(--text-primary)] mb-3">
+            Thread Colors
+          </h2>
+          <p className="text-sm text-[var(--text-muted)]">Upload an image to see your thread colors</p>
         </div>
       </div>
     );
@@ -66,47 +70,37 @@ export function PalettePanel() {
   };
 
   return (
-    <div className="p-8 bg-[var(--paper-2)] border border-[var(--border)] h-full flex flex-col relative">
-      <div className="flex items-baseline justify-between mb-8">
-        <div className="flex items-baseline gap-3">
-          <h2 className="text-[10px] font-sans font-bold text-[var(--muted)] uppercase tracking-[0.2em]">
-            Thread Manifest
+    <div className="p-6 lg:p-8 glass-card rounded-xl h-full flex flex-col relative overflow-hidden">
+      <div className="relative z-10 flex flex-col mb-6">
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="text-lg font-serif font-normal text-[var(--text-primary)]">
+            Thread Colors
           </h2>
-          <span className="text-[9px] font-sans text-[var(--muted)] opacity-50 font-mono">
-            COUNT_{palette.length.toString().padStart(2, '0')}
-          </span>
+          <span className="text-sm text-[var(--text-muted)] tabular-nums">{palette.length}</span>
         </div>
+        
         <button
           onClick={copyThreadList}
-          className="text-[9px] font-sans font-bold text-[var(--accent)] hover:text-[var(--muted)] uppercase tracking-widest underline underline-offset-4 decoration-[0.5px] transition-colors"
+          className="self-start px-4 py-2 glass-card hover:bg-white/10 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wider rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-[var(--pastel-purple)]/30 border border-white/10"
         >
-          {copied ? 'Copied' : 'Export .CSV'}
+          {copied ? '✓ Copied' : 'Copy List'}
         </button>
       </div>
 
-      <div className="flex flex-col flex-1 overflow-y-auto pr-2 scrollbar-hide">
-        {/* Manifest Labels */}
-        <div className="flex items-center gap-4 pb-2 hairline-b mb-4">
-          <span className="w-8 text-[9px] font-sans font-bold text-[var(--muted)] uppercase tracking-tighter">Color</span>
-          <span className="flex-1 text-[9px] font-sans font-bold text-[var(--muted)] uppercase tracking-tighter ml-4">Identification / Specification</span>
-          <span className="text-[9px] font-sans font-bold text-[var(--muted)] uppercase tracking-tighter text-right">%</span>
-        </div>
-
-        <div className="space-y-0 flex-1">
-          {sortedPalette.map((color, index) => (
-            <PaletteItem
-              key={index}
-              color={color}
-              index={palette.indexOf(color)}
-              isHighlighted={highlightedColorIndex === palette.indexOf(color)}
-              onToggleHighlight={() => {
-                setHighlightedColorIndex(
-                  highlightedColorIndex === palette.indexOf(color) ? null : palette.indexOf(color)
-                );
-              }}
-            />
-          ))}
-        </div>
+      <div className="flex flex-col flex-1 overflow-y-auto -mr-2 pr-2 space-y-3 relative z-10">
+        {sortedPalette.map((color, index) => (
+          <PaletteItem
+            key={index}
+            color={color}
+            index={palette.indexOf(color)}
+            isHighlighted={highlightedColorIndex === palette.indexOf(color)}
+            onToggleHighlight={() => {
+              setHighlightedColorIndex(
+                highlightedColorIndex === palette.indexOf(color) ? null : palette.indexOf(color)
+              );
+            }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -126,56 +120,46 @@ function PaletteItem({ color, index, isHighlighted, onToggleHighlight }: Palette
   return (
     <button
       onClick={onToggleHighlight}
-      className={`w-full flex items-center gap-4 py-3 hairline-b transition-all text-left group ${isHighlighted
-          ? 'bg-[var(--accent)] text-[var(--white)]'
-          : 'bg-transparent text-[var(--ink)] hover:bg-[var(--accent-light)]/50'
+      className={`w-full flex items-center gap-4 p-4 rounded-lg transition-all text-left group focus:outline-none focus:ring-2 focus:ring-[var(--pastel-purple)]/30 ${isHighlighted
+          ? 'bg-[var(--pastel-purple)] scale-[1.01]'
+          : 'glass-card hover:bg-white/10'
         }`}
     >
-      {/* Color swatch - square, no border unless white-ish */}
+      {/* Color swatch */}
       <div
-        className="w-10 h-10 flex-shrink-0"
+        className={`w-12 h-12 flex-shrink-0 rounded-lg transition-all ${isHighlighted ? 'ring-2 ring-white/30' : ''}`}
         style={{
           backgroundColor: color.hex,
-          border: color.hex.toLowerCase() === '#ffffff' || color.hex.toLowerCase() === '#f6f1e7' ? '1px solid var(--border)' : 'none'
+          border: color.hex.toLowerCase() === '#ffffff' || color.hex.toLowerCase() === '#f6f1e7' ? '1px solid rgba(255,255,255,0.2)' : 'none'
         }}
       />
 
-      {/* Color info - structured */}
-      <div className="flex-1 min-w-0 ml-4">
+      {/* Color info */}
+      <div className="flex-1 min-w-0">
         {hasDmcMatch ? (
-          <div className="flex flex-col">
-            <div className="flex items-baseline gap-2">
-              <span className={`text-[11px] font-sans font-bold uppercase tracking-tight ${isHighlighted ? 'text-[var(--paper)]' : 'text-[var(--ink)]'}`}>
-                DMC_{color.dmcMatch.best.id}
-              </span>
-              <span className={`text-[9px] font-mono opacity-50 ${isHighlighted ? 'text-[var(--paper)]' : 'text-[var(--muted)]'}`}>
-                {color.hex}
-              </span>
+          <div className="flex flex-col gap-1">
+            <div className={`text-sm font-semibold ${isHighlighted ? 'text-white' : 'text-[var(--text-primary)]'}`}>
+              DMC {color.dmcMatch.best.id}
             </div>
-            <div className={`text-[10px] font-sans uppercase tracking-widest mt-0.5 truncate ${isHighlighted ? 'text-[var(--paper)] opacity-80' : 'text-[var(--muted)]'}`}>
-              {color.dmcMatch.best.name}
+            <div className={`text-xs capitalize truncate ${isHighlighted ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
+              {color.dmcMatch.best.name.toLowerCase()}
             </div>
           </div>
         ) : (
-          <div className="flex flex-col">
-            <div className="flex items-baseline gap-2">
-              <span className={`text-[11px] font-sans font-bold uppercase tracking-tight ${isHighlighted ? 'text-[var(--paper)]' : 'text-[var(--ink)]'}`}>
-                COLOR_{index.toString().padStart(2, '0')}
-              </span>
-              <span className={`text-[9px] font-mono opacity-50 ${isHighlighted ? 'text-[var(--paper)]' : 'text-[var(--muted)]'}`}>
-                {color.hex}
-              </span>
+          <div className="flex flex-col gap-1">
+            <div className={`text-sm font-semibold ${isHighlighted ? 'text-white' : 'text-[var(--text-primary)]'}`}>
+              Color {index + 1}
             </div>
-            <div className={`text-[10px] font-sans uppercase tracking-widest mt-0.5 truncate ${isHighlighted ? 'text-[var(--paper)] opacity-80' : 'text-[var(--muted)]'}`}>
-              {isLoadingDmc ? 'Processing Match...' : 'Unspecified Dye'}
+            <div className={`text-xs ${isHighlighted ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
+              {isLoadingDmc ? 'Finding match...' : color.hex}
             </div>
           </div>
         )}
       </div>
 
-      {/* Percentage */}
-      <div className={`text-[11px] font-mono tabular-nums pr-2 ${isHighlighted ? 'text-[var(--paper)]' : 'text-[var(--ink)]'}`}>
-        {color.percent.toFixed(1).padStart(4, '0')}
+      {/* Percentage badge */}
+      <div className={`px-3 py-1.5 rounded-md text-xs font-semibold tabular-nums ${isHighlighted ? 'bg-white/20 text-white' : 'glass-card text-[var(--text-secondary)]'}`}>
+        {color.percent.toFixed(1)}%
       </div>
     </button>
   );
