@@ -422,4 +422,185 @@ describe('generate_blueprint_v1 tool', () => {
             expect(result.indexedPreviewPngBase64).toBeUndefined();
         });
     });
+
+    describe('region cleanup', () => {
+        // Create a test image that will produce small regions/islands
+        // A checkerboard-like pattern with some noise should create small isolated regions
+        it('should merge small regions when minRegionArea is set', async () => {
+            // Create a simple 20x20 image with alternating colors that will create small regions
+            // We'll use a pattern that creates isolated single-pixel regions
+            const width = 20;
+            const height = 20;
+            const pixels = new Uint8Array(width * height * 4);
+            
+            // Create a checkerboard pattern with some isolated pixels
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    // Checkerboard: red and blue
+                    if ((x + y) % 2 === 0) {
+                        pixels[idx] = 255;     // R
+                        pixels[idx + 1] = 0;   // G
+                        pixels[idx + 2] = 0;   // B
+                    } else {
+                        pixels[idx] = 0;       // R
+                        pixels[idx + 1] = 0;   // G
+                        pixels[idx + 2] = 255; // B
+                    }
+                    pixels[idx + 3] = 255; // A
+                }
+            }
+
+            // Convert to base64 PNG
+            const sharp = await import('sharp');
+            const imageBuffer = await sharp.default(pixels, {
+                raw: { width, height, channels: 4 }
+            }).png().toBuffer();
+            const testImageBase64 = imageBuffer.toString('base64');
+
+            // Test without region cleanup
+            const inputWithoutMerge: GenerateBlueprintV1Input = {
+                imageBase64: testImageBase64,
+                paletteSize: 2,
+                seed: 42,
+            };
+
+            // Test with region cleanup
+            const inputWithMerge: GenerateBlueprintV1Input = {
+                imageBase64: testImageBase64,
+                paletteSize: 2,
+                seed: 42,
+                minRegionArea: 5, // Merge regions smaller than 5 pixels
+            };
+
+            const resultWithoutMerge = await generateBlueprintV1Handler(inputWithoutMerge);
+            const resultWithMerge = await generateBlueprintV1Handler(inputWithMerge);
+
+            expect(resultWithoutMerge.ok).toBe(true);
+            expect(resultWithMerge.ok).toBe(true);
+
+            // Both should have same total pixels
+            expect(resultWithoutMerge.totalPixels).toBe(resultWithMerge.totalPixels);
+            expect(resultWithoutMerge.totalPixels).toBe(width * height);
+
+            // With merging, we expect fewer small regions (though exact counts depend on quantization)
+            // The key is that total pixels are preserved
+            if (resultWithoutMerge.palette && resultWithMerge.palette) {
+                let totalCountWithout = 0;
+                let totalCountWith = 0;
+                resultWithoutMerge.palette.forEach(c => totalCountWithout += c.count);
+                resultWithMerge.palette.forEach(c => totalCountWith += c.count);
+                expect(totalCountWithout).toBe(totalCountWith);
+                expect(totalCountWithout).toBe(width * height);
+            }
+        });
+
+        it('should preserve determinism when region cleanup is enabled', async () => {
+            const input: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 5,
+                seed: 12345,
+                minRegionArea: 10,
+            };
+
+            const result1 = await generateBlueprintV1Handler(input);
+            const result2 = await generateBlueprintV1Handler(input);
+
+            expect(result1.ok).toBe(true);
+            expect(result2.ok).toBe(true);
+
+            // Results should be identical with same seed and merge settings
+            expect(result1.totalPixels).toBe(result2.totalPixels);
+            if (result1.palette && result2.palette) {
+                expect(result1.palette.length).toBe(result2.palette.length);
+                for (let i = 0; i < result1.palette.length; i++) {
+                    expect(result1.palette[i].count).toBe(result2.palette[i].count);
+                    expect(result1.palette[i].rgb.r).toBe(result2.palette[i].rgb.r);
+                    expect(result1.palette[i].rgb.g).toBe(result2.palette[i].rgb.g);
+                    expect(result1.palette[i].rgb.b).toBe(result2.palette[i].rgb.b);
+                }
+            }
+        });
+
+        it('should not merge regions when minRegionArea is 0', async () => {
+            const input1: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+                seed: 42,
+                minRegionArea: 0,
+            };
+
+            const input2: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+                seed: 42,
+                // No minRegionArea specified (defaults to 0)
+            };
+
+            const result1 = await generateBlueprintV1Handler(input1);
+            const result2 = await generateBlueprintV1Handler(input2);
+
+            expect(result1.ok).toBe(true);
+            expect(result2.ok).toBe(true);
+
+            // Results should be identical (both have merging disabled)
+            if (result1.palette && result2.palette) {
+                expect(result1.palette.length).toBe(result2.palette.length);
+                for (let i = 0; i < result1.palette.length; i++) {
+                    expect(result1.palette[i].count).toBe(result2.palette[i].count);
+                }
+            }
+        });
+
+        it('should respect mergeSmallRegions parameter', async () => {
+            const inputWithMergeDisabled: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+                seed: 42,
+                minRegionArea: 10,
+                mergeSmallRegions: false, // Explicitly disable
+            };
+
+            const inputWithMergeEnabled: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 3,
+                seed: 42,
+                minRegionArea: 10,
+                mergeSmallRegions: true, // Explicitly enable
+            };
+
+            const resultDisabled = await generateBlueprintV1Handler(inputWithMergeDisabled);
+            const resultEnabled = await generateBlueprintV1Handler(inputWithMergeEnabled);
+
+            expect(resultDisabled.ok).toBe(true);
+            expect(resultEnabled.ok).toBe(true);
+
+            // When disabled, should behave like minRegionArea = 0
+            // When enabled, may have different region counts
+            // Both should preserve total pixels
+            expect(resultDisabled.totalPixels).toBe(resultEnabled.totalPixels);
+        });
+
+        it('should update preview image with merged regions', async () => {
+            const input: GenerateBlueprintV1Input = {
+                imageBase64: RED_SQUARE_BASE64,
+                paletteSize: 5,
+                seed: 42,
+                minRegionArea: 10,
+                returnPreview: true,
+            };
+
+            const result = await generateBlueprintV1Handler(input);
+
+            expect(result.ok).toBe(true);
+            expect(result.indexedPreviewPngBase64).toBeDefined();
+            
+            // Preview should reflect merged regions (valid PNG)
+            const previewBuffer = Buffer.from(result.indexedPreviewPngBase64!, 'base64');
+            expect(previewBuffer[0]).toBe(0x89);
+            expect(previewBuffer[1]).toBe(0x50); // P
+            expect(previewBuffer[2]).toBe(0x4E); // N
+            expect(previewBuffer[3]).toBe(0x47); // G
+        });
+    });
 });

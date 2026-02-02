@@ -16,6 +16,8 @@ export interface GenerateBlueprintV1Input {
     maxSize?: number; // Default 2048 (only used when imageBase64 is provided)
     seed?: number; // Optional seed for deterministic output (default: 42)
     returnPreview?: boolean; // If true, return indexedPreviewPngBase64 (default: false)
+    minRegionArea?: number; // Minimum region area in pixels (default: 0, meaning off)
+    mergeSmallRegions?: boolean; // If true, merge regions smaller than minRegionArea (default: false unless minRegionArea > 0)
 }
 
 export interface PaletteColor {
@@ -49,6 +51,251 @@ function rgbToHex(rgb: RGB): string {
         .map((val) => Math.max(0, Math.min(255, val)).toString(16).padStart(2, "0"))
         .join("")
         .toUpperCase()}`;
+}
+
+/**
+ * Region structure for connected-components analysis
+ */
+interface Region {
+    id: number;
+    clusterIndex: number;
+    pixelIndices: number[];
+    neighborRegions: Set<number>;
+}
+
+/**
+ * Connected-components labeling (4-connected) per cluster label
+ * Returns array of regions and a label map (regionId -> clusterIndex)
+ */
+function extractRegions(
+    width: number,
+    height: number,
+    clusterLabels: number[]
+): { regions: Region[]; regionLabelMap: Int32Array } {
+    const regionLabels = new Int32Array(width * height).fill(-1);
+    let regionCount = 0;
+    const regions: Region[] = [];
+
+    const getClusterLabel = (x: number, y: number) => clusterLabels[y * width + x];
+    const getRegionId = (x: number, y: number) => regionLabels[y * width + x];
+
+    // First pass: label connected components
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (getRegionId(x, y) !== -1) continue;
+
+            const clusterIdx = getClusterLabel(x, y);
+            const currentRegionId = regionCount++;
+            const pixelIndices: number[] = [];
+            const queue: [number, number][] = [[x, y]];
+
+            regionLabels[y * width + x] = currentRegionId;
+
+            // Flood fill with 4-connectivity
+            while (queue.length > 0) {
+                const [cx, cy] = queue.shift()!;
+                pixelIndices.push(cy * width + cx);
+
+                // 4-connected neighbors
+                const neighbors: [number, number][] = [
+                    [cx + 1, cy],
+                    [cx - 1, cy],
+                    [cx, cy + 1],
+                    [cx, cy - 1],
+                ];
+
+                for (const [nx, ny] of neighbors) {
+                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                        if (getRegionId(nx, ny) === -1 && getClusterLabel(nx, ny) === clusterIdx) {
+                            regionLabels[ny * width + nx] = currentRegionId;
+                            queue.push([nx, ny]);
+                        }
+                    }
+                }
+            }
+
+            regions.push({
+                id: currentRegionId,
+                clusterIndex: clusterIdx,
+                pixelIndices,
+                neighborRegions: new Set(),
+            });
+        }
+    }
+
+    // Second pass: identify neighboring regions
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const r1 = getRegionId(x, y);
+            // Check right and bottom neighbors (avoid duplicates)
+            const checkNeighbors: [number, number][] = [
+                [x + 1, y],
+                [x, y + 1],
+            ];
+            for (const [nx, ny] of checkNeighbors) {
+                if (nx < width && ny < height) {
+                    const r2 = getRegionId(nx, ny);
+                    if (r1 !== r2 && r1 !== -1 && r2 !== -1) {
+                        regions[r1].neighborRegions.add(r2);
+                        regions[r2].neighborRegions.add(r1);
+                    }
+                }
+            }
+        }
+    }
+
+    return { regions, regionLabelMap: regionLabels };
+}
+
+/**
+ * Merges small regions into neighboring regions
+ * Uses majority adjacency by default, or smallest deltaE if useDeltaE is true
+ */
+function mergeSmallRegions(
+    width: number,
+    height: number,
+    regions: Region[],
+    minArea: number,
+    clusterLabels: number[],
+    labPixels: Lab[],
+    useDeltaE: boolean = false
+): number[] {
+    const updatedLabels = [...clusterLabels];
+    let changed = true;
+
+    while (changed) {
+        changed = false;
+        const smallRegionIndex = regions.findIndex(
+            (r) => r.pixelIndices.length > 0 && r.pixelIndices.length < minArea
+        );
+
+        if (smallRegionIndex === -1) break;
+
+        const smallRegion = regions[smallRegionIndex];
+        if (smallRegion.neighborRegions.size === 0) {
+            // Isolated region, can't merge - mark as processed by clearing pixels
+            smallRegion.pixelIndices = [];
+            continue;
+        }
+
+        let bestCluster: number | null = null;
+
+        if (useDeltaE) {
+            // Method: smallest deltaE to region mean
+            // Compute mean Lab color of small region
+            const regionLabSum = { l: 0, a: 0, b: 0 };
+            smallRegion.pixelIndices.forEach((pixelIdx) => {
+                const lab = labPixels[pixelIdx];
+                regionLabSum.l += lab.l;
+                regionLabSum.a += lab.a;
+                regionLabSum.b += lab.b;
+            });
+            const regionArea = smallRegion.pixelIndices.length;
+            const regionMeanLab: Lab = {
+                l: regionLabSum.l / regionArea,
+                a: regionLabSum.a / regionArea,
+                b: regionLabSum.b / regionArea,
+            };
+
+            // Find neighbor cluster with smallest deltaE
+            const neighborClusters = new Map<number, Lab[]>();
+            smallRegion.neighborRegions.forEach((neighborId) => {
+                const neighbor = regions[neighborId];
+                if (neighbor.pixelIndices.length > 0) {
+                    const clusterIdx = neighbor.clusterIndex;
+                    if (!neighborClusters.has(clusterIdx)) {
+                        neighborClusters.set(clusterIdx, []);
+                    }
+                    // Collect all pixels from this neighbor cluster
+                    neighbor.pixelIndices.forEach((pixelIdx) => {
+                        neighborClusters.get(clusterIdx)!.push(labPixels[pixelIdx]);
+                    });
+                }
+            });
+
+            let minDeltaE = Infinity;
+            neighborClusters.forEach((pixelLabs, clusterIdx) => {
+                // Compute mean Lab of neighbor cluster
+                const neighborLabSum = { l: 0, a: 0, b: 0 };
+                pixelLabs.forEach((lab) => {
+                    neighborLabSum.l += lab.l;
+                    neighborLabSum.a += lab.a;
+                    neighborLabSum.b += lab.b;
+                });
+                const neighborMeanLab: Lab = {
+                    l: neighborLabSum.l / pixelLabs.length,
+                    a: neighborLabSum.a / pixelLabs.length,
+                    b: neighborLabSum.b / pixelLabs.length,
+                };
+
+                const deltaE = deltaE76(regionMeanLab, neighborMeanLab);
+                if (deltaE < minDeltaE) {
+                    minDeltaE = deltaE;
+                    bestCluster = clusterIdx;
+                }
+            });
+        } else {
+            // Method: majority adjacency (simplest)
+            const neighborClusters = new Map<number, number>();
+            smallRegion.neighborRegions.forEach((neighborId) => {
+                const neighbor = regions[neighborId];
+                if (neighbor.pixelIndices.length > 0) {
+                    const clusterIdx = neighbor.clusterIndex;
+                    const count = neighborClusters.get(clusterIdx) || 0;
+                    neighborClusters.set(clusterIdx, count + neighbor.pixelIndices.length);
+                }
+            });
+
+            if (neighborClusters.size > 0) {
+                let maxCount = -1;
+                neighborClusters.forEach((count, clusterIdx) => {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        bestCluster = clusterIdx;
+                    }
+                });
+            }
+        }
+
+        if (bestCluster !== null) {
+            // Find a neighbor region with the best cluster
+            const targetRegionId = Array.from(smallRegion.neighborRegions).find(
+                (id) => regions[id].clusterIndex === bestCluster && regions[id].pixelIndices.length > 0
+            );
+
+            if (targetRegionId !== undefined) {
+                const targetRegion = regions[targetRegionId];
+
+                // Reassign pixels
+                smallRegion.pixelIndices.forEach((pixelIdx) => {
+                    updatedLabels[pixelIdx] = bestCluster!;
+                });
+
+                // Merge pixel indices into target region
+                targetRegion.pixelIndices.push(...smallRegion.pixelIndices);
+
+                // Update neighbor relationships
+                smallRegion.neighborRegions.forEach((neighborId) => {
+                    if (neighborId !== targetRegionId) {
+                        regions[neighborId].neighborRegions.delete(smallRegion.id);
+                        if (!regions[neighborId].neighborRegions.has(targetRegionId)) {
+                            regions[neighborId].neighborRegions.add(targetRegionId);
+                            targetRegion.neighborRegions.add(neighborId);
+                        }
+                    }
+                });
+
+                targetRegion.neighborRegions.delete(smallRegion.id);
+                smallRegion.pixelIndices = [];
+                changed = true;
+            }
+        } else {
+            // No valid neighbor found, mark as processed
+            smallRegion.pixelIndices = [];
+        }
+    }
+
+    return updatedLabels;
 }
 
 /**
@@ -140,7 +387,19 @@ function quantizeLab(
 export async function generateBlueprintV1Handler(
     input: GenerateBlueprintV1Input
 ): Promise<GenerateBlueprintV1Output> {
-    const { imageId, imageBase64, paletteSize, maxSize = 2048, seed = 42, returnPreview = false } = input;
+    const {
+        imageId,
+        imageBase64,
+        paletteSize,
+        maxSize = 2048,
+        seed = 42,
+        returnPreview = false,
+        minRegionArea = 0,
+        mergeSmallRegions: mergeSmallRegionsParam,
+    } = input;
+
+    // Determine if region merging should be enabled
+    const shouldMergeRegions = minRegionArea > 0 && (mergeSmallRegionsParam !== false);
 
     // Validate input
     if (!imageId && !imageBase64) {
@@ -265,9 +524,26 @@ export async function generateBlueprintV1Handler(
         const rng = new SeededRNG(seed);
 
         // Quantize using k-means in Lab space
-        const { clusters: labCentroids, labels } = quantizeLab(labPixels, paletteSize, rng);
+        let { clusters: labCentroids, labels } = quantizeLab(labPixels, paletteSize, rng);
 
-        // Count pixels per cluster and compute mean RGB for each cluster
+        // Region cleanup: merge small regions if enabled
+        if (shouldMergeRegions) {
+            // Extract connected components (regions) per cluster label
+            const { regions } = extractRegions(width, height, labels);
+
+            // Merge small regions
+            labels = mergeSmallRegions(
+                width,
+                height,
+                regions,
+                minRegionArea,
+                labels,
+                labPixels,
+                false // Use majority adjacency (simpler)
+            );
+        }
+
+        // Count pixels per cluster and compute mean RGB for each cluster (after merging)
         const clusterCounts = new Array(paletteSize).fill(0);
         const clusterRgbSums: RGB[] = Array.from({ length: paletteSize }, () => ({ r: 0, g: 0, b: 0 }));
 
@@ -428,6 +704,15 @@ export const generateBlueprintV1Tool = {
                 type: "boolean",
                 description: "If true, return indexedPreviewPngBase64 with quantized preview image (default: false)",
                 default: false,
+            },
+            minRegionArea: {
+                type: "number",
+                description: "Minimum region area in pixels for region cleanup (default: 0, meaning off). Recommended: 50-200 depending on maxSize.",
+                minimum: 0,
+            },
+            mergeSmallRegions: {
+                type: "boolean",
+                description: "If true, merge regions smaller than minRegionArea (default: true when minRegionArea > 0, false otherwise)",
             },
         },
         required: ["paletteSize"],

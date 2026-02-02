@@ -433,6 +433,8 @@ Quantizes an image into N perceptual colors using Lab color space, returns a pal
 - `maxSize` (optional): Maximum dimension for image resize (default: 2048, only used when `imageBase64` is provided)
 - `seed` (optional): Seed for deterministic output (default: 42). Same input + same seed produces identical results
 - `returnPreview` (optional): If `true`, returns `indexedPreviewPngBase64` with quantized preview image (default: `false`)
+- `minRegionArea` (optional): Minimum region area in pixels for region cleanup (default: 0, meaning off). When > 0, merges small regions to reduce confetti artifacts. Recommended: 50-200 depending on `maxSize`.
+- `mergeSmallRegions` (optional): If `true`, merge regions smaller than `minRegionArea` (default: `true` when `minRegionArea > 0`, `false` otherwise)
 
 **Output:**
 
@@ -503,7 +505,11 @@ On error (`ok: false`):
 - Images are automatically resized to `maxSize` for memory efficiency
 - **Deterministic output**: Same input + same `seed` produces identical results. Default seed is `42`.
 - **Preview image**: When `returnPreview: true`, returns a quantized preview where each pixel is replaced by its cluster mean color, at the resized working dimensions.
-- Phase 1 implementation: no SVG tracing, no region adjacency, no contours
+- **Region cleanup (Phase 1.5)**: When `minRegionArea > 0`, performs connected-components analysis (4-connected) and merges small regions into neighboring regions using majority adjacency. This reduces confetti artifacts from quantization. Recommended `minRegionArea` values:
+  - Small images (`maxSize` < 512): 10-50 pixels
+  - Medium images (`maxSize` 512-1024): 50-100 pixels
+  - Large images (`maxSize` > 1024): 100-200 pixels
+- Phase 1.5 implementation: includes region cleanup, but no SVG tracing, no region adjacency graphs, no contours
 
 ## Adding a New Tool
 
