@@ -4,7 +4,9 @@ node_modules/
 # Build outputs
 dist/
 .next/
-next-env.d.ts
+apps/*/dist/
+apps/*/.next/
+*.tsbuildinfo
 
 # Environment variables
 .env

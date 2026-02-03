@@ -105,13 +105,14 @@ export function TexturePlane({
       materialRef.current.uniforms.uTexture.value = texture;
       materialRef.current.needsUpdate = true;
       previousTextureRef.current = texture;
+      const textureImage = texture.image as { width?: number; height?: number } | undefined;
       
       // Check if texture image is already loaded
       const updateDimensions = () => {
-        if (texture.image && texture.image.width && texture.image.height) {
+        if (textureImage?.width && textureImage?.height) {
           setTextureDimensions({
-            width: texture.image.width,
-            height: texture.image.height,
+            width: textureImage.width,
+            height: textureImage.height,
           });
         }
       };

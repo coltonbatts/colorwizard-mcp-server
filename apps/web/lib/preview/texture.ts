@@ -17,8 +17,8 @@ import * as THREE from 'three';
 export function base64ToTexture(
   base64Data: string,
   options?: {
-    minFilter?: THREE.TextureFilter;
-    magFilter?: THREE.TextureFilter;
+    minFilter?: THREE.MinificationTextureFilter;
+    magFilter?: THREE.MagnificationTextureFilter;
     generateMipmaps?: boolean;
   }
 ): THREE.Texture {

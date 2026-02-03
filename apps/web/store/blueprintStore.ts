@@ -184,7 +184,9 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
     // Limit cache size to 20 entries
     if (cache.size >= 20) {
       const firstKey = cache.keys().next().value;
-      cache.delete(firstKey);
+      if (typeof firstKey === 'string') {
+        cache.delete(firstKey);
+      }
     }
     cache.set(key, response);
     set({ cache: new Map(cache) });
@@ -195,7 +197,9 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
     // Limit cache size to 200 entries (enough for many palettes)
     if (dmcCache.size >= 200) {
       const firstKey = dmcCache.keys().next().value;
-      dmcCache.delete(firstKey);
+      if (typeof firstKey === 'string') {
+        dmcCache.delete(firstKey);
+      }
     }
     dmcCache.set(hex, dmcMatch);
     set({ dmcCache: new Map(dmcCache) });

@@ -114,7 +114,8 @@ interface PaletteItemProps {
 }
 
 function PaletteItem({ color, index, isHighlighted, onToggleHighlight }: PaletteItemProps) {
-  const hasDmcMatch = color.dmcMatch?.ok && color.dmcMatch.best;
+  const dmcBest = color.dmcMatch?.ok ? color.dmcMatch.best : undefined;
+  const hasDmcMatch = Boolean(dmcBest);
   const isLoadingDmc = !hasDmcMatch && color.dmcMatch?.ok === false;
 
   return (
@@ -139,10 +140,10 @@ function PaletteItem({ color, index, isHighlighted, onToggleHighlight }: Palette
         {hasDmcMatch ? (
           <div className="flex flex-col gap-1">
             <div className={`text-sm font-semibold ${isHighlighted ? 'text-white' : 'text-[var(--text-primary)]'}`}>
-              DMC {color.dmcMatch.best.id}
+              DMC {dmcBest?.id}
             </div>
             <div className={`text-xs capitalize truncate ${isHighlighted ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
-              {color.dmcMatch.best.name.toLowerCase()}
+              {dmcBest?.name.toLowerCase()}
             </div>
           </div>
         ) : (

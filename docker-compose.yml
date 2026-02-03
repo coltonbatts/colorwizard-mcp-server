@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: colorwizard-mcp
     restart: unless-stopped
-    # Currently using stdio transport, but exposing port for future SSE transport
+    # MCP service container (apps/mcp). Port reserved for future SSE/HTTP transport.
     ports:
       - "3000:3000"
     # Volume mount for image files if needed for image analysis
